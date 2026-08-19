@@ -1,0 +1,24 @@
+# Gradle / build output
+build/
+.gradle/
+out/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Fabric Loom dev runtime
+run/
+runs/
+
+# Reference checkout of the browser engine, kept locally for API inspection.
+# Stream-able depends on the published MCEF Modern artifact, not on this tree.
+mcef-modern/
+logs/
+
+# Reference checkout of the Plasmo Voice addon used to learn its API.
+pv-addon-soundphysics/

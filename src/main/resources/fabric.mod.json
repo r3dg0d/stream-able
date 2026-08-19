@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "streamable",
+  "version": "${version}",
+  "name": "Stream-able",
+  "description": "An OBS-like recording, livestreaming and multistreaming studio that runs inside Minecraft, with interactive Chromium browser sources composited over gameplay. Derived from Record-able by JoEusebe.",
+  "authors": [
+    "Stream-able contributors"
+  ],
+  "contributors": [
+    "JoEusebe (Record-able, the project this is derived from)"
+  ],
+  "contact": {
+    "sources": "https://github.com/JoEusebe/record-able"
+  },
+  "license": "MIT",
+  "icon": "assets/streamable/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.streamable.StreamAble"
+    ]
+  },
+  "mixins": [
+    "streamable.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "java": ">=25"
+  },
+  "suggests": {
+    "mcef-modern": ">=0.3.3",
+    "modmenu": "*",
+    "plasmovoice": ">=2.1.0"
+  }
+}

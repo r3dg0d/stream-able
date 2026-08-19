@@ -1,0 +1,116 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'java'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+// Minecraft 26.x ships a deobfuscated client, so no mapping layer is declared
+// (this mirrors MCEF Modern's own buildscript for the same Minecraft line).
+loom {
+    runs {
+        client {
+            client()
+            ideConfigGenerated = true
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    // MCEF Modern
+    maven {
+        name = 'DimasKama'
+        url = uri('https://maven.dimaskama.net/releases')
+    }
+    // Plasmo Voice API, for the voice-chat capture addon.
+    maven {
+        name = 'PlasmoVerse'
+        url = uri('https://repo.plasmoverse.com/releases')
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = uri('https://api.modrinth.com/maven')
+            }
+        }
+        filter { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+
+    // Browser engine. Deliberately an *optional* runtime dependency: Stream-able
+    // degrades to "browser sources unavailable" if MCEF is missing or fails to
+    // initialize, so fabric.mod.json only "suggests" it.
+    // Minecraft 26.x is distributed deobfuscated, so Loom exposes no remapping
+    // ("mod*") configurations - mod dependencies are plain Gradle dependencies.
+    implementation "net.dimaskama:mcef-modern:${mcef_version}"
+
+    // JCEF API types (org.cef.*). MCEF ships these nested (JiJ) at runtime; we
+    // need them on the compile classpath to talk to CefClient/CefBrowser.
+    compileOnly "me.friwi:jcef-api:${jcef_api_version}"
+
+    // Plasmo Voice client API. compileOnly on purpose: voice-chat capture is an
+    // optional integration, and the classes touching it are only ever loaded
+    // when the plasmovoice mod is actually present.
+    compileOnly "su.plo.voice.api:client:${plasmo_voice_version}"
+
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft_version', project.minecraft_version
+    inputs.property 'loader_version', project.loader_version
+
+    filesMatching('fabric.mod.json') {
+        expand 'version': inputs.properties.version,
+                'minecraft_version': inputs.properties.minecraft_version,
+                'loader_version': inputs.properties.loader_version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+    it.options.encoding = 'UTF-8'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+    withSourcesJar()
+}
+
+// Unit tests cover pure logic only (transform math, config schema, secret
+// redaction, FFmpeg argument building, source ordering). They never boot
+// Minecraft, so they run on a plain JVM.
+tasks.named('test', Test) {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
+    }
+}
+
+jar {
+    // Attribution ships with the artifact, as the MIT License requires.
+    from('LICENSE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+    from('NOTICE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}

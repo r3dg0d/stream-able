@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stream-able browser source test page</title>
+<style>
+  /* Transparent by default: Minecraft must be visible through the gaps.
+     Stream-able also injects a forced-transparency block, so this page
+     doubles as a check that the injection worked. */
+  html, body { background: transparent; margin: 0; padding: 0; overflow: hidden;
+               font-family: system-ui, sans-serif; color: #fff; }
+  .panel { background: rgba(20, 24, 30, 0.82); border: 1px solid #4dd0e1;
+           border-radius: 8px; padding: 10px 12px; margin: 8px; }
+  h1 { font-size: 15px; margin: 0 0 6px; color: #4dd0e1; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 5px 0; font-size: 12px; }
+  input[type=text], input[type=password], textarea, select {
+      background: #10141a; color: #fff; border: 1px solid #546e7a;
+      border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+  textarea { width: 260px; height: 44px; }
+  button { background: #00838f; color: #fff; border: 0; border-radius: 4px;
+           padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  button:hover { background: #00acc1; }
+  #log { height: 76px; overflow-y: scroll; background: #0b0e12; border: 1px solid #37474f;
+         border-radius: 4px; padding: 4px 6px; font: 11px/1.45 monospace; white-space: pre-wrap; }
+  /* The transparency acceptance test: a red circle on nothing at all.
+     Minecraft must be fully visible everywhere outside the circle. */
+  #transparency { position: fixed; right: 24px; bottom: 24px; width: 120px; height: 120px;
+                  border-radius: 50%; background: #e53935; }
+  #spinner { width: 22px; height: 22px; border: 3px solid #4dd0e1; border-top-color: transparent;
+             border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  canvas { border: 1px solid #546e7a; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h1>Stream-able browser source test page</h1>
+
+  <div class="row">
+    <label>Text</label>
+    <input type="text" id="text" placeholder="type, then Backspace / Enter">
+    <span id="textLen">0</span>
+  </div>
+
+  <div class="row">
+    <label>Password</label>
+    <input type="password" id="password" placeholder="hidden input">
+    <label>Select</label>
+    <select id="select"><option>Alpha</option><option>Beta</option><option>Gamma</option></select>
+  </div>
+
+  <div class="row">
+    <textarea id="area" placeholder="multi-line: Enter must insert a newline"></textarea>
+  </div>
+
+  <div class="row">
+    <button id="click">Click me</button>
+    <button id="click2">And me</button>
+    <label><input type="checkbox" id="check"> Checkbox</label>
+    <div id="spinner" title="animation check"></div>
+  </div>
+
+  <div class="row">
+    <button id="audio">Play sound</button>
+    <canvas id="canvas" width="90" height="34"></canvas>
+  </div>
+
+  <div class="row" style="display:block">
+    <div id="log"></div>
+  </div>
+</div>
+
+<div id="transparency" title="Minecraft must be visible outside this circle"></div>
+
+<script>
+(function () {
+  var log = document.getElementById('log');
+  var lines = 0;
+  function say(message) {
+    lines++;
+    log.textContent += '[' + lines + '] ' + message + '\n';
+    log.scrollTop = log.scrollHeight;   // also exercises programmatic scrolling
+  }
+
+  say('Loaded. Shim present: ' + (!!window.__streamableInputShim));
+
+  var text = document.getElementById('text');
+  text.addEventListener('input', function () {
+    document.getElementById('textLen').textContent = text.value.length;
+  });
+
+  // Report the keys that MCEF issue #4 is about. "default prevented/handled"
+  // tells you whether the native path or the shim did the work.
+  ['keydown', 'keyup'].forEach(function (type) {
+    document.addEventListener(type, function (ev) {
+      if (['Backspace', 'Delete', 'Enter', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight',
+           'ArrowUp', 'ArrowDown'].indexOf(ev.key) >= 0) {
+        say(type + ' ' + ev.key + (ev.ctrlKey ? ' +ctrl' : '') + (ev.shiftKey ? ' +shift' : ''));
+      } else if (ev.ctrlKey && type === 'keydown') {
+        say('shortcut ctrl+' + ev.key);
+      }
+    }, true);
+  });
+
+  document.addEventListener('keypress', function (ev) {
+    say('keypress charCode=' + ev.charCode);
+  }, true);
+
+  ['click', 'click2'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      say('clicked #' + id + ' - if this is the wrong button, rotated hit-testing is broken');
+    });
+  });
+
+  document.getElementById('check').addEventListener('change', function (ev) {
+    say('checkbox ' + ev.target.checked);
+  });
+  document.getElementById('select').addEventListener('change', function (ev) {
+    say('select ' + ev.target.value);
+  });
+
+  document.addEventListener('paste', function () { say('paste event'); });
+  document.addEventListener('copy', function () { say('copy event'); });
+  document.addEventListener('cut', function () { say('cut event'); });
+
+  // Audio check. With the JCEF build Stream-able targets there is no
+  // CefAudioHandler, so this should be audible locally but will NOT appear in
+  // the broadcast - see BrowserAudioBridge.
+  document.getElementById('audio').addEventListener('click', function () {
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.frequency.value = 660;
+      gain.gain.value = 0.15;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      setTimeout(function () { osc.stop(); ctx.close(); }, 350);
+      say('played a 660 Hz tone (local monitoring only)');
+    } catch (e) {
+      say('audio failed: ' + e.message);
+    }
+  });
+
+  // Canvas + animation: proves the renderer is live rather than a screenshot.
+  var canvas = document.getElementById('canvas').getContext('2d');
+  var frame = 0;
+  setInterval(function () {
+    frame++;
+    canvas.clearRect(0, 0, 90, 34);
+    canvas.fillStyle = '#4dd0e1';
+    canvas.fillRect((frame * 3) % 80, 6, 10, 22);
+    canvas.fillStyle = '#fff';
+    canvas.font = '10px monospace';
+    canvas.fillText('f' + frame, 4, 30);
+  }, 100);
+
+  say('Ready. Try: type, Backspace, Enter, Tab, Ctrl+A, Ctrl+C, Ctrl+V, scroll, click.');
+})();
+</script>
+</body>
+</html>

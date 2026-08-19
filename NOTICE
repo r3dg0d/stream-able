@@ -1,0 +1,48 @@
+Stream-able
+===========
+
+Stream-able is a derivative work of **Record-able** by JoEusebe (Minewind's Jo
+Eusebe), used and redistributed under the MIT License. The original copyright
+notice and permission notice are preserved in full in the LICENSE file, as the
+MIT License requires.
+
+What was inherited from Record-able
+-----------------------------------
+The following components are ported from Record-able with their behaviour
+intentionally unchanged; only the package, the logging category and the branding
+were adapted. Each file carries a header naming its origin:
+
+  dev/streamable/audio/AudioCapture.java            (device detection)
+  dev/streamable/audio/JavaAudioCapture.java        (Java Sound capture)
+  dev/streamable/audio/OpenALAudioCapture.java      (OpenAL capture)
+  dev/streamable/audio/OpenALLoopbackCapture.java   (OpenAL loopback game audio)
+  dev/streamable/audio/WASAPIAudioCapture.java      (Windows loopback helper)
+  dev/streamable/ffmpeg/FfmpegBundleManager.java    (FFmpeg download + verification)
+  dev/streamable/ffmpeg/EncoderType.java
+  dev/streamable/ffmpeg/MediaCodecEncoder.java
+  dev/streamable/recording/VideoMetadata.java       (probing, thumbnails, duration)
+  dev/streamable/recording/DiskSpaceGuardian.java
+  dev/streamable/util/PlatformUtils.java            (platform detection)
+
+dev/streamable/util/PerformanceMetrics.java keeps Record-able's public API but
+was reimplemented without the Micrometer dependency.
+
+The recording architecture - raw frames to FFmpeg over stdin, audio captured in
+parallel and muxed afterwards with a measured `-itsoffset` - is Record-able's
+design and is preserved deliberately, because it is what keeps long recordings
+free of audio drift.
+
+Third-party components
+----------------------
+* MCEF Modern (https://github.com/DimasKama/mcef-modern) by DimasKama, licensed
+  LGPL-2.1. Used as an optional runtime dependency; Stream-able links against
+  its published API and ships no modified copy of it.
+* JCEF / java-cef and the Chromium Embedded Framework, reached through MCEF
+  Modern, under their respective BSD-style licences.
+* FFmpeg, invoked as an external process and never bundled. Builds are
+  downloaded at the user's request from the upstream mirrors Record-able already
+  used, with checksum verification.
+
+Nothing in this project is copied from OBS Studio. OBS is referenced only as
+inspiration for workflow and terminology ("browser source", "transform box",
+"multistreaming").
