@@ -1,0 +1,150 @@
+{
+  "schema": 1,
+  "_comment": "Pinned runtime components. Every artifact is fetched over HTTPS and must match its SHA-256 before it is extracted, executed or loaded. This file ships inside the mod jar and is never fetched remotely; updating a pin means releasing a new Stream-able version.",
+  "components": {
+    "ffmpeg": {
+      "displayName": "FFmpeg",
+      "version": "9.0.2",
+      "license": "GPL-3.0-or-later (GPL build of FFmpeg, including x264). Executed as a separate process; never linked.",
+      "source": "Linux: BtbN/FFmpeg-Builds autobuild-2026-09-22-13-18 (n9.0.2 GPL). Windows: GyanD/codexffmpeg 9.0.2 essentials build.",
+      "artifacts": [
+        {
+          "platform": "linux-x86_64",
+          "urls": ["https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-22-13-18/ffmpeg-n9.0.2-3-ga5923073bf-linux64-gpl-9.0.tar.xz"],
+          "sha256": "6cb8d11e4ce7f067079a6866b94145918d1c121604d578236015181f9677d5fd",
+          "size": 150154132,
+          "format": "tar.xz",
+          "fileName": "ffmpeg-n9.0.2-linux64-gpl-9.0.tar.xz",
+          "stripComponents": 1,
+          "include": ["bin/ffmpeg", "bin/ffprobe", "LICENSE.txt"],
+          "executables": ["bin/ffmpeg", "bin/ffprobe"]
+        },
+        {
+          "platform": "windows-x86_64",
+          "urls": ["https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip"],
+          "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+          "size": 114768076,
+          "format": "zip",
+          "fileName": "ffmpeg-9.0.2-essentials_build.zip",
+          "stripComponents": 1,
+          "include": ["bin/ffmpeg.exe", "bin/ffprobe.exe", "LICENSE"],
+          "executables": []
+        }
+      ]
+    },
+    "jcef-natives": {
+      "displayName": "Browser Engine (Chromium / JCEF)",
+      "version": "jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179",
+      "license": "JCEF and CEF: BSD-3-Clause. Chromium: BSD-3-Clause plus third-party licences listed in the bundle.",
+      "source": "Maven Central, me.friwi:jcef-natives (jcefmaven build 1.0.70), the build MCEF Modern 0.3.3 is compiled against.",
+      "artifacts": [
+        {
+          "platform": "linux-x86_64",
+          "urls": [
+            "https://repo.maven.apache.org/maven2/me/friwi/jcef-natives-linux-amd64/jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179/jcef-natives-linux-amd64-jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179.jar",
+            "https://repo1.maven.org/maven2/me/friwi/jcef-natives-linux-amd64/jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179/jcef-natives-linux-amd64-jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179.jar"
+          ],
+          "sha256": "b089370c3bf8f853183ec822817e1b58348d90d1236bb6a26e921f513449dac2",
+          "size": 147903463,
+          "format": "zip+tar.gz",
+          "fileName": "jcef-natives-linux-amd64.jar",
+          "stripComponents": 0,
+          "include": [],
+          "executables": ["jcef_helper", "chrome-sandbox", "*.so", "*.so.*"]
+        },
+        {
+          "platform": "windows-x86_64",
+          "urls": [
+            "https://repo.maven.apache.org/maven2/me/friwi/jcef-natives-windows-amd64/jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179/jcef-natives-windows-amd64-jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179.jar",
+            "https://repo1.maven.org/maven2/me/friwi/jcef-natives-windows-amd64/jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179/jcef-natives-windows-amd64-jcef-d3de827+cef-146.0.10+g8219561+chromium-146.0.7680.179.jar"
+          ],
+          "sha256": "e9a2d4ef3c33b372c24655ee4cdaf9ef23fe2de5f7e57410576569977299c4b4",
+          "size": 162120546,
+          "format": "zip+tar.gz",
+          "fileName": "jcef-natives-windows-amd64.jar",
+          "stripComponents": 0,
+          "include": [],
+          "executables": []
+        }
+      ]
+    },
+    "onnxruntime": {
+      "displayName": "ONNX Runtime (AI inference)",
+      "version": "1.30.0",
+      "license": "MIT (Microsoft). Third-party notices ship inside the artifact (ThirdPartyNotices.txt).",
+      "source": "Maven Central, com.microsoft.onnxruntime:onnxruntime:1.30.0 (CPU build).",
+      "artifacts": [
+        {
+          "platform": "linux-x86_64",
+          "urls": [
+            "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.30.0/onnxruntime-1.30.0.jar",
+            "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.30.0/onnxruntime-1.30.0.jar"
+          ],
+          "sha256": "57d8cedf6f0c8fd6d50ed65c17bf9939f55a4512f4a1f3e732023d258f262ac6",
+          "size": 55572031,
+          "format": "file",
+          "fileName": "onnxruntime-1.30.0.jar"
+        },
+        {
+          "platform": "windows-x86_64",
+          "urls": [
+            "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.30.0/onnxruntime-1.30.0.jar",
+            "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.30.0/onnxruntime-1.30.0.jar"
+          ],
+          "sha256": "57d8cedf6f0c8fd6d50ed65c17bf9939f55a4512f4a1f3e732023d258f262ac6",
+          "size": 55572031,
+          "format": "file",
+          "fileName": "onnxruntime-1.30.0.jar"
+        }
+      ]
+    },
+    "model-dpdfnet2-48k": {
+      "displayName": "DPDFNet-2 48 kHz model",
+      "version": "hf-dd6818d",
+      "license": "Apache-2.0 (code and weights), Ceva-IP/DPDFNet",
+      "source": "huggingface.co/Ceva-IP/DPDFNet at revision dd6818d00f50c836fed43a6243ebe49116de5964",
+      "artifacts": [
+        {
+          "platform": "any",
+          "urls": ["https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/dpdfnet2_48khz_hr.onnx"],
+          "sha256": "7f0575a5cec0ba4ffd8f8bd657e06d007e4ccdd955d76faab922b9d3291dc14b",
+          "size": 10493337,
+          "format": "file",
+          "fileName": "dpdfnet2_48khz_hr.onnx"
+        }
+      ]
+    },
+    "model-dfn2-16k": {
+      "displayName": "DeepFilterNet2 16 kHz model (DPDFNet baseline)",
+      "version": "hf-dd6818d",
+      "license": "Apache-2.0 (code and weights), Ceva-IP/DPDFNet 'baseline' checkpoint: the DeepFilterNet2 architecture with zero DPRNN blocks",
+      "source": "huggingface.co/Ceva-IP/DPDFNet at revision dd6818d00f50c836fed43a6243ebe49116de5964",
+      "artifacts": [
+        {
+          "platform": "any",
+          "urls": ["https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/baseline.onnx"],
+          "sha256": "371d26182aff0e1e0d31354e24c81f79cd57458f5a7dd003fc10a7ebf64255e0",
+          "size": 8722707,
+          "format": "file",
+          "fileName": "dfn2_baseline_16khz.onnx"
+        }
+      ]
+    },
+    "model-gtcrn-16k": {
+      "displayName": "GTCRN 16 kHz model",
+      "version": "git-502ebfa",
+      "license": "MIT, Xiaobin-Rong/gtcrn (weights trained on DNS3, distributed in the MIT-licensed repository)",
+      "source": "github.com/Xiaobin-Rong/gtcrn at commit 502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73, stream/onnx_models/gtcrn_simple.onnx",
+      "artifacts": [
+        {
+          "platform": "any",
+          "urls": ["https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73/stream/onnx_models/gtcrn_simple.onnx"],
+          "sha256": "b4718df6228e7bdf1a8a435cf98f838636eb2fd331acabf86ba87c5192ebcb87",
+          "size": 535190,
+          "format": "file",
+          "fileName": "gtcrn_simple.onnx"
+        }
+      ]
+    }
+  }
+}

@@ -50,12 +50,31 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 
-    // Browser engine. Deliberately an *optional* runtime dependency: Stream-able
-    // degrades to "browser sources unavailable" if MCEF is missing or fails to
-    // initialize, so fabric.mod.json only "suggests" it.
+    // Browser engine. MCEF Modern (LGPL-2.1) is bundled unmodified through
+    // Fabric's Jar-in-Jar, so players no longer install it separately. It stays
+    // a separate, replaceable jar inside ours - which is what the LGPL asks of a
+    // combined work - and a newer standalone MCEF in mods/ still wins Fabric's
+    // version resolution. Stream-able pre-installs the Chromium natives MCEF
+    // needs through its own verified runtime manager (see runtime/ and
+    // browser/BrowserRuntime), so MCEF's unverified downloader never runs.
     // Minecraft 26.x is distributed deobfuscated, so Loom exposes no remapping
     // ("mod*") configurations - mod dependencies are plain Gradle dependencies.
     implementation "net.dimaskama:mcef-modern:${mcef_version}"
+    include "net.dimaskama:mcef-modern:${mcef_version}"
+
+    // XZ for Java (0BSD). Decompresses the pinned Linux FFmpeg build, which is
+    // only published as .tar.xz. Tiny, dependency-free, bundled via Jar-in-Jar.
+    implementation "org.tukaani:xz:${xz_version}"
+    include "org.tukaani:xz:${xz_version}"
+
+    // ONNX Runtime Java API, compile-time only. The runtime jar (with its
+    // native libraries) is ~55 MB, so it is never shipped inside Stream-able:
+    // AudioInferenceRuntime downloads the pinned, SHA-256-verified artifact on
+    // demand and loads it in an isolated class loader. Only the classes in
+    // dev.streamable.audio.ai.ort touch this API, and they are defined inside
+    // that loader, never by the mod's own class loader.
+    compileOnly "com.microsoft.onnxruntime:onnxruntime:${onnxruntime_version}"
+    testImplementation "com.microsoft.onnxruntime:onnxruntime:${onnxruntime_version}"
 
     // JCEF API types (org.cef.*). MCEF ships these nested (JiJ) at runtime; we
     // need them on the compile classpath to talk to CefClient/CefBrowser.
