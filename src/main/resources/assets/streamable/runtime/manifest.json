@@ -4,30 +4,45 @@
   "components": {
     "ffmpeg": {
       "displayName": "FFmpeg",
-      "version": "9.0.2",
-      "license": "GPL-3.0-or-later (GPL build of FFmpeg, including x264). Executed as a separate process; never linked.",
-      "source": "Linux: BtbN/FFmpeg-Builds autobuild-2026-09-22-13-18 (n9.0.2 GPL). Windows: GyanD/codexffmpeg 9.0.2 essentials build.",
+      "version": "8.1.3",
+      "license": "GPL-3.0-or-later (BtbN GPL build of FFmpeg, including x264/x265). Executed as a separate process; never linked.",
+      "source": "BtbN/FFmpeg-Builds autobuild-2026-09-22-13-18, n8.1.3 GPL release-branch builds for Linux and Windows. Pinned to the 8.1 branch because the 9.0 builds require NVENC API 13.1 (NVIDIA driver 610+), which would silently disable NVENC for players on older drivers.",
       "artifacts": [
         {
           "platform": "linux-x86_64",
-          "urls": ["https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-22-13-18/ffmpeg-n9.0.2-3-ga5923073bf-linux64-gpl-9.0.tar.xz"],
-          "sha256": "6cb8d11e4ce7f067079a6866b94145918d1c121604d578236015181f9677d5fd",
-          "size": 150154132,
+          "urls": [
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-22-13-18/ffmpeg-n8.1.3-linux64-gpl-8.1.tar.xz"
+          ],
+          "sha256": "312cb2fd253022a1118a416e80bcea5649dc438b15f40ab24887983a46956232",
+          "size": 149364760,
           "format": "tar.xz",
-          "fileName": "ffmpeg-n9.0.2-linux64-gpl-9.0.tar.xz",
+          "fileName": "ffmpeg-n8.1.3-linux64-gpl-8.1.tar.xz",
           "stripComponents": 1,
-          "include": ["bin/ffmpeg", "bin/ffprobe", "LICENSE.txt"],
-          "executables": ["bin/ffmpeg", "bin/ffprobe"]
+          "include": [
+            "bin/ffmpeg",
+            "bin/ffprobe",
+            "LICENSE.txt"
+          ],
+          "executables": [
+            "bin/ffmpeg",
+            "bin/ffprobe"
+          ]
         },
         {
           "platform": "windows-x86_64",
-          "urls": ["https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip"],
-          "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
-          "size": 114768076,
+          "urls": [
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-22-13-18/ffmpeg-n8.1.3-win64-gpl-8.1.zip"
+          ],
+          "sha256": "ed885833e406f0f7a1ea0304dd170779117799b2fba8096abc3e2e4dd679cc20",
+          "size": 191997816,
           "format": "zip",
-          "fileName": "ffmpeg-9.0.2-essentials_build.zip",
+          "fileName": "ffmpeg-n8.1.3-win64-gpl-8.1.zip",
           "stripComponents": 1,
-          "include": ["bin/ffmpeg.exe", "bin/ffprobe.exe", "LICENSE"],
+          "include": [
+            "bin/ffmpeg.exe",
+            "bin/ffprobe.exe",
+            "LICENSE.txt"
+          ],
           "executables": []
         }
       ]
@@ -50,7 +65,12 @@
           "fileName": "jcef-natives-linux-amd64.jar",
           "stripComponents": 0,
           "include": [],
-          "executables": ["jcef_helper", "chrome-sandbox", "*.so", "*.so.*"]
+          "executables": [
+            "jcef_helper",
+            "chrome-sandbox",
+            "*.so",
+            "*.so.*"
+          ]
         },
         {
           "platform": "windows-x86_64",
@@ -106,7 +126,9 @@
       "artifacts": [
         {
           "platform": "any",
-          "urls": ["https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/dpdfnet2_48khz_hr.onnx"],
+          "urls": [
+            "https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/dpdfnet2_48khz_hr.onnx"
+          ],
           "sha256": "7f0575a5cec0ba4ffd8f8bd657e06d007e4ccdd955d76faab922b9d3291dc14b",
           "size": 10493337,
           "format": "file",
@@ -122,7 +144,9 @@
       "artifacts": [
         {
           "platform": "any",
-          "urls": ["https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/baseline.onnx"],
+          "urls": [
+            "https://huggingface.co/Ceva-IP/DPDFNet/resolve/dd6818d00f50c836fed43a6243ebe49116de5964/onnx/baseline.onnx"
+          ],
           "sha256": "371d26182aff0e1e0d31354e24c81f79cd57458f5a7dd003fc10a7ebf64255e0",
           "size": 8722707,
           "format": "file",
@@ -138,7 +162,9 @@
       "artifacts": [
         {
           "platform": "any",
-          "urls": ["https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73/stream/onnx_models/gtcrn_simple.onnx"],
+          "urls": [
+            "https://raw.githubusercontent.com/Xiaobin-Rong/gtcrn/502ebfab64da7c4a9af78dcb9c6ceef1ebb01c73/stream/onnx_models/gtcrn_simple.onnx"
+          ],
           "sha256": "b4718df6228e7bdf1a8a435cf98f838636eb2fd331acabf86ba87c5192ebcb87",
           "size": 535190,
           "format": "file",

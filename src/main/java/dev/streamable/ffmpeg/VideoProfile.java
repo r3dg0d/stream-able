@@ -19,6 +19,8 @@ package dev.streamable.ffmpeg;
  * @param preset             encoder preset name, or blank for the encoder default
  * @param h264Profile        H.264 profile (baseline/main/high), or blank
  * @param bFrames            number of B-frames; {@code 0} is safest for low latency
+ * @param quality            constant-quality level for {@link RateControl#CONSTANT_QUALITY},
+ *                           on the x264 CRF scale (0 = lossless, 18 = visually lossless, 23 = default)
  */
 public record VideoProfile(
         VideoEncoder encoder,
@@ -32,12 +34,18 @@ public record VideoProfile(
         double keyframeSeconds,
         String preset,
         String h264Profile,
-        int bFrames) {
+        int bFrames,
+        int quality) {
+
+    /** Default constant-quality level: high quality, sensible file sizes. */
+    public static final int DEFAULT_QUALITY = 20;
 
     public VideoProfile {
-        // Most encoders reject odd dimensions with yuv420p chroma subsampling.
-        width = Math.clamp(width - (width % 2), 16, 16384);
-        height = Math.clamp(height - (height % 2), 16, 16384);
+        // Dimensions are range-checked only. Odd sizes are rejected with an
+        // explanation by OutputValidation before any encoder starts; they are
+        // never silently rounded here.
+        width = Math.clamp(width, 16, 16384);
+        height = Math.clamp(height, 16, 16384);
         fps = Math.clamp(fps, 1, 480);
         bitrateKbps = Math.clamp(bitrateKbps, 100, 200_000);
         maxBitrateKbps = maxBitrateKbps <= 0 ? bitrateKbps : Math.clamp(maxBitrateKbps, 100, 400_000);
@@ -48,6 +56,24 @@ public record VideoProfile(
         bFrames = Math.clamp(bFrames, 0, 8);
         encoder = encoder == null ? VideoEncoder.X264 : encoder;
         rateControl = rateControl == null ? RateControl.CBR : rateControl;
+        quality = Math.clamp(quality, 0, 51);
+    }
+
+    public VideoProfile(VideoEncoder encoder, int width, int height, int fps, RateControl rateControl,
+                        int bitrateKbps, int maxBitrateKbps, int bufferSizeKbits, double keyframeSeconds,
+                        String preset, String h264Profile, int bFrames) {
+        this(encoder, width, height, fps, rateControl, bitrateKbps, maxBitrateKbps, bufferSizeKbits,
+                keyframeSeconds, preset, h264Profile, bFrames, DEFAULT_QUALITY);
+    }
+
+    /** Maps the 0-100 "quality" slider (100 = best) onto the CRF scale. */
+    public static int qualityFromSlider(int slider) {
+        int clamped = Math.clamp(slider, 0, 100);
+        return (int) Math.round(30 - clamped * 0.14);   // 0 -> 30, 50 -> 23, 100 -> 16
+    }
+
+    public dev.streamable.video.Resolution resolution() {
+        return new dev.streamable.video.Resolution(width, height);
     }
 
     /**

@@ -24,13 +24,15 @@ public final class FFmpegManager {
 
     private final Path gameDirectory;
     private volatile Resolution resolution;
+    private volatile FFmpegRuntime managed;
+    private volatile String configuredPath = "";
 
     public FFmpegManager(Path gameDirectory) {
         this.gameDirectory = gameDirectory;
     }
 
     /** Where a resolved binary came from. */
-    public enum Origin { CONFIGURED, STREAM_ABLE_BUNDLE, RECORD_ABLE_BUNDLE, SYSTEM_PATH, NONE }
+    public enum Origin { CONFIGURED, MANAGED, MANAGED_PREVIOUS, STREAM_ABLE_BUNDLE, RECORD_ABLE_BUNDLE, SYSTEM_PATH, NONE }
 
     /**
      * @param executable absolute path or bare command name; empty when not found
@@ -45,8 +47,10 @@ public final class FFmpegManager {
 
         public String describe() {
             return switch (origin) {
-                case CONFIGURED -> "Configured path";
-                case STREAM_ABLE_BUNDLE -> "Downloaded by Stream-able";
+                case CONFIGURED -> "Expert override path";
+                case MANAGED -> "Managed by Stream-able (verified)";
+                case MANAGED_PREVIOUS -> "Previous Stream-able runtime (update pending)";
+                case STREAM_ABLE_BUNDLE -> "Legacy Stream-able download";
                 case RECORD_ABLE_BUNDLE -> "Reused from an existing Record-able install";
                 case SYSTEM_PATH -> "Found on PATH";
                 case NONE -> "Not found";
@@ -75,9 +79,27 @@ public final class FFmpegManager {
         return gameDirectory.resolve("recordable").resolve("ffmpeg").resolve("bin");
     }
 
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+    }
+
     public static String executableName() {
         return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
                 ? "ffmpeg.exe" : "ffmpeg";
+    }
+
+    /** Connects the verified managed runtime; it is preferred over everything but an override. */
+    public void setManagedRuntime(FFmpegRuntime runtime) {
+        this.managed = runtime;
+    }
+
+    public FFmpegRuntime managedRuntime() {
+        return managed;
+    }
+
+    /** The expert override path; blank means "no override". */
+    public void setConfiguredPath(String path) {
+        this.configuredPath = path == null ? "" : path.trim();
     }
 
     /** Cached resolution, resolving on first use. */
@@ -87,7 +109,7 @@ public final class FFmpegManager {
             synchronized (this) {
                 current = resolution;
                 if (current == null) {
-                    current = resolve(null);
+                    current = resolve(configuredPath);
                     resolution = current;
                 }
             }
@@ -97,7 +119,8 @@ public final class FFmpegManager {
 
     /** Forces a fresh lookup, e.g. after a download or a settings change. */
     public Resolution refresh(String configuredPath) {
-        Resolution fresh = resolve(configuredPath);
+        setConfiguredPath(configuredPath);
+        Resolution fresh = resolve(this.configuredPath);
         resolution = fresh;
         return fresh;
     }
@@ -107,6 +130,14 @@ public final class FFmpegManager {
         if (configuredPath != null && !configuredPath.isBlank()) {
             candidates.add(java.util.Map.entry(Path.of(configuredPath.trim()), Origin.CONFIGURED));
         }
+        FFmpegRuntime runtime = managed;
+        if (runtime != null) {
+            runtime.installedExecutable().ifPresent(path ->
+                    candidates.add(java.util.Map.entry(path, Origin.MANAGED)));
+            for (Path previous : runtime.previousExecutables()) {
+                candidates.add(java.util.Map.entry(previous, Origin.MANAGED_PREVIOUS));
+            }
+        }
         candidates.add(java.util.Map.entry(bundleDirectory().resolve(executableName()),
                 Origin.STREAM_ABLE_BUNDLE));
         candidates.add(java.util.Map.entry(legacyBundleDirectory().resolve(executableName()),
@@ -114,7 +145,7 @@ public final class FFmpegManager {
 
         for (var candidate : candidates) {
             Path path = candidate.getKey();
-            if (Files.isRegularFile(path) && Files.isExecutable(path)) {
+            if (Files.isRegularFile(path) && (Files.isExecutable(path) || isWindows())) {
                 String version = queryVersion(path.toAbsolutePath().toString());
                 if (version != null) {
                     if (candidate.getValue() == Origin.RECORD_ABLE_BUNDLE) {
@@ -136,7 +167,7 @@ public final class FFmpegManager {
     /** Runs {@code ffmpeg -version}; {@code null} when the binary does not work. */
     private static String queryVersion(String executable) {
         try {
-            Process process = new ProcessBuilder(executable, "-hide_banner", "-version")
+            Process process = FFmpegProcesses.builder(List.of(executable, "-hide_banner", "-version"))
                     .redirectErrorStream(true)
                     .start();
             String output;
@@ -176,8 +207,8 @@ public final class FFmpegManager {
     private static volatile FFmpegManager shared;
 
     /** Installs the process-wide instance. Called once during mod init. */
-    public static void initShared(Path gameDirectory) {
-        shared = new FFmpegManager(gameDirectory);
+    public static void initShared(FFmpegManager manager) {
+        shared = manager;
     }
 
     /** The shared instance, falling back to the working directory if not yet set. */

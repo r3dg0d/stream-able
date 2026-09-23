@@ -444,7 +444,9 @@ public final class ArchiveExtractor {
         void directory(String rawName) throws IOException {
             count();
             String relative = sanitise(rawName, artifact.stripComponents());
-            if (relative == null) {
+            if (relative == null || !artifact.include().isEmpty()) {
+                // With an include filter, directories are created on demand by
+                // the files that survive it, so filtered-out trees leave nothing.
                 return;
             }
             Path target = resolve(relative);
