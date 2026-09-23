@@ -1,6 +1,7 @@
 package dev.streamable.compositor;
 
 import dev.streamable.source.transform.Point2;
+import dev.streamable.video.Resolution;
 
 /**
  * The coordinate system every source transform is expressed in.
@@ -33,8 +34,17 @@ public record ProgramCanvas(int width, int height) {
     public static final ProgramCanvas DEFAULT = new ProgramCanvas(1920, 1080);
 
     public ProgramCanvas {
-        width = Math.clamp(width, 16, 16384);
-        height = Math.clamp(height, 16, 16384);
+        Resolution safe = Resolution.clamped(width, height);
+        width = safe.width();
+        height = safe.height();
+    }
+
+    public ProgramCanvas(Resolution resolution) {
+        this(resolution.width(), resolution.height());
+    }
+
+    public Resolution resolution() {
+        return new Resolution(width, height);
     }
 
     public double aspectRatio() {

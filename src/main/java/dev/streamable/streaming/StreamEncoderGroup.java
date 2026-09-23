@@ -253,13 +253,40 @@ public final class StreamEncoderGroup implements AutoCloseable {
         return start(withAudio);
     }
 
-    /** Queues a composed frame. Returns false when the frame was dropped. */
-    public boolean submitFrame(byte[] frame) {
+    /**
+     * Manual reconnect from the UI: tears the process down and starts again
+     * immediately. Unlike {@link #close()} this leaves the group active, so
+     * it is promoted to LIVE and retried on failure as normal.
+     */
+    public String restart(boolean withAudio) {
+        FFmpegProcess current = process;
+        stopped = true;             // suppress the exit callback while we stop it
+        if (current != null) {
+            current.stop();
+        }
+        process = null;
+        closeAudio();
+        stopped = false;
+        attempts = 0;
+        nextRetryAtMillis = 0;
+        return start(withAudio);
+    }
+
+    /** Queues a captured frame standing for {@code repeat} output frames. */
+    public boolean submitFrame(dev.streamable.pipeline.PooledFrame frame, int repeat) {
         FFmpegProcess current = process;
         if (current == null) {
             return false;
         }
-        return current.offerFrame(frame) == FFmpegProcess.FrameResult.ACCEPTED;
+        return current.offerFrame(frame, repeat) == FFmpegProcess.FrameResult.ACCEPTED;
+    }
+
+    public FFmpegProcess process() {
+        return process;
+    }
+
+    public int attempts() {
+        return attempts;
     }
 
     public void submitAudio(byte[] pcm) {

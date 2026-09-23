@@ -47,7 +47,10 @@ public final class StreamAble implements ClientModInitializer {
                 Identifier.fromNamespaceAndPath(MOD_ID, "stream_health"), new StreamHealthHud());
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
-        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> runtime.shutdown());
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            runtime.shutdown();
+            runtime.releaseGpuResources();
+        });
 
         // A hard JVM exit must not leave a half-written recording or an orphaned
         // FFmpeg/Chromium process behind.

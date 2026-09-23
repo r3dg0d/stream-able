@@ -17,13 +17,15 @@ import java.util.List;
 public final class StreamAbleConfig {
 
     /** Bumped whenever the on-disk shape changes in a way that needs migration. */
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     public int schemaVersion = CURRENT_SCHEMA_VERSION;
 
     public RecordingSettings recording = new RecordingSettings();
     public StreamingSettings streaming = new StreamingSettings();
     public InterfaceSettings ui = new InterfaceSettings();
+    public VideoSettings video = new VideoSettings();
+    public RuntimeSettings runtime = new RuntimeSettings();
     public List<BrowserSourceSettings> browserSources = new ArrayList<>();
 
     /** Set once a legacy Record-able configuration has been imported. */
@@ -39,6 +41,12 @@ public final class StreamAbleConfig {
         if (ui == null) {
             ui = new InterfaceSettings();
         }
+        if (video == null) {
+            video = new VideoSettings();
+        }
+        if (runtime == null) {
+            runtime = new RuntimeSettings();
+        }
         if (browserSources == null) {
             browserSources = new ArrayList<>();
         }
@@ -46,6 +54,8 @@ public final class StreamAbleConfig {
         recording.validate();
         streaming.validate();
         ui.validate();
+        video.validate();
+        runtime.validate();
         schemaVersion = CURRENT_SCHEMA_VERSION;
     }
 

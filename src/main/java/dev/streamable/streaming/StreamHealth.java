@@ -29,10 +29,18 @@ public record StreamHealth(
         long framesDropped,
         double queuePressure,
         String encoderName,
-        List<DestinationStatus> destinations) {
+        List<DestinationStatus> destinations,
+        double outputKbps,
+        double encodeFps,
+        double encodeLatencyMillis,
+        double encodeSpeed,
+        long framesRepeatedForTiming,
+        int reconnects,
+        int audioBitrateKbps,
+        String outputResolution) {
 
     public static final StreamHealth OFFLINE = new StreamHealth(
-            false, 0, 0, 0, 0, 0, 0, "", List.of());
+            false, 0, 0, 0, 0, 0, 0, "", List.of(), -1, -1, -1, -1, 0, 0, 0, "");
 
     /** One row of the health HUD. */
     public record DestinationStatus(String name, DestinationState state, String detail) {

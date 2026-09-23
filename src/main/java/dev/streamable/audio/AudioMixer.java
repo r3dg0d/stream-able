@@ -44,6 +44,8 @@ public final class AudioMixer {
     private final Map<AudioBus.Kind, AudioBus> buses = new EnumMap<>(AudioBus.Kind.class);
     private final Map<AudioBus.Kind, PcmRingBuffer> pending = new EnumMap<>(AudioBus.Kind.class);
     private final CopyOnWriteArrayList<Consumer<byte[]>> sinks = new CopyOnWriteArrayList<>();
+    private final Map<AudioBus.Kind, CopyOnWriteArrayList<Consumer<byte[]>>> busSinks = new EnumMap<>(AudioBus.Kind.class);
+    private final Map<AudioBus.Kind, java.util.concurrent.atomic.AtomicLong> trimmedBytes = new EnumMap<>(AudioBus.Kind.class);
     private volatile boolean active;
     private Thread clockThread;
     private long startNanos;
@@ -53,6 +55,8 @@ public final class AudioMixer {
         for (AudioBus.Kind kind : AudioBus.Kind.values()) {
             buses.put(kind, new AudioBus(kind));
             pending.put(kind, new PcmRingBuffer(SAMPLE_RATE * FRAME_BYTES));  // 1 second
+            busSinks.put(kind, new CopyOnWriteArrayList<>());
+            trimmedBytes.put(kind, new java.util.concurrent.atomic.AtomicLong());
         }
     }
 
@@ -71,6 +75,47 @@ public final class AudioMixer {
 
     public void removeSink(Consumer<byte[]> sink) {
         sinks.remove(sink);
+    }
+
+    /**
+     * Receives one bus's post-gain contribution for every mixer block - silence
+     * when the bus is quiet - so a separate track stays sample-aligned with the
+     * program mix.
+     */
+    public void addBusSink(AudioBus.Kind kind, Consumer<byte[]> sink) {
+        busSinks.get(kind).add(sink);
+    }
+
+    public void removeBusSink(AudioBus.Kind kind, Consumer<byte[]> sink) {
+        busSinks.get(kind).remove(sink);
+    }
+
+    /**
+     * Largest backlog a bus may hold before the oldest audio is trimmed.
+     *
+     * <p>Each capture device runs on its own crystal, so over a long session a
+     * microphone delivers slightly more or fewer samples than the mixer's
+     * wall-clock consumes. Without a bound that difference accumulates as
+     * latency. Trimming the backlog of one bus never touches the mixer clock,
+     * so the program stream's timing stays exact.</p>
+     */
+    static int maxBacklogBytes(AudioBus.Kind kind) {
+        int millis = switch (kind) {
+            case MICROPHONE -> 80;
+            case VOICE_CHAT -> 200;
+            case GAME, BROWSER -> 200;
+        };
+        return SAMPLE_RATE * millis / 1000 * FRAME_BYTES;
+    }
+
+    /** Bytes of this bus trimmed to hold its latency bound (diagnostics). */
+    public long trimmedBytes(AudioBus.Kind kind) {
+        return trimmedBytes.get(kind).get();
+    }
+
+    /** Current backlog of a bus in milliseconds (diagnostics). */
+    public double backlogMillis(AudioBus.Kind kind) {
+        return pending.get(kind).size() / (double) FRAME_BYTES * 1000.0 / SAMPLE_RATE;
     }
 
     /**
@@ -126,15 +171,37 @@ public final class AudioMixer {
     }
 
     /** Emits exactly as many frames as wall-clock time says are owed. */
-    private void emitDue() {
-        long elapsedNanos = System.nanoTime() - startNanos;
+    void emitDue() {
+        emitDue(System.nanoTime());
+    }
+
+    /**
+     * Emits every sample frame owed by {@code nowNanos}, in blocks of at most
+     * one second. Owed time is never discarded: after a stall the backlog is
+     * emitted (as silence where buses have nothing), so the byte count - and
+     * FFmpeg's derived timestamps - stay locked to elapsed time.
+     */
+    void emitDue(long nowNanos) {
+        long elapsedNanos = nowNanos - startNanos;
         long dueFrames = elapsedNanos * SAMPLE_RATE / 1_000_000_000L;
-        int missing = (int) Math.min(dueFrames - framesEmitted, SAMPLE_RATE);
-        if (missing <= 0) {
-            return;
+        while (dueFrames - framesEmitted > 0) {
+            int missing = (int) Math.min(dueFrames - framesEmitted, SAMPLE_RATE);
+            framesEmitted += missing;
+            emitBlock(missing * FRAME_BYTES);
         }
-        framesEmitted += missing;
-        emitBlock(missing * FRAME_BYTES);
+    }
+
+    /** Test seam: starts the clock at a given instant without the timer thread. */
+    synchronized void startClockForTesting(long startNanos) {
+        buses.values().forEach(AudioBus::reset);
+        pending.values().forEach(PcmRingBuffer::clear);
+        this.startNanos = startNanos;
+        framesEmitted = 0;
+        active = true;
+    }
+
+    public long framesEmitted() {
+        return framesEmitted;
     }
 
     /** Mixes every bus's queued audio into one block and publishes it. */
@@ -144,7 +211,27 @@ public final class AudioMixer {
         for (AudioBus.Kind kind : AudioBus.Kind.values()) {
             AudioBus bus = buses.get(kind);
             float gain = bus.effectiveGain();
-            int read = pending.get(kind).read(scratch, byteCount);
+            PcmRingBuffer buffer = pending.get(kind);
+            int excess = buffer.size() - byteCount - maxBacklogBytes(kind);
+            if (excess > 0) {
+                excess -= excess % FRAME_BYTES;
+                trimmedBytes.get(kind).addAndGet(buffer.discard(excess));
+            }
+            int read = buffer.read(scratch, byteCount);
+            CopyOnWriteArrayList<Consumer<byte[]>> taps = busSinks.get(kind);
+            if (!taps.isEmpty()) {
+                byte[] contribution = new byte[byteCount];
+                if (read > 0 && gain > 0) {
+                    mixInto(contribution, scratch, read, gain, true);
+                }
+                for (Consumer<byte[]> tap : taps) {
+                    try {
+                        tap.accept(contribution);
+                    } catch (RuntimeException e) {
+                        StreamAbleLog.AUDIO.warn("Audio bus sink rejected a block", e);
+                    }
+                }
+            }
             if (read <= 0 || gain <= 0) {
                 continue;
             }
@@ -258,6 +345,18 @@ public final class AudioMixer {
 
         synchronized void clear() {
             size = 0;
+        }
+
+        synchronized int size() {
+            return size;
+        }
+
+        /** Drops the oldest {@code count} bytes; returns how many were dropped. */
+        synchronized int discard(int count) {
+            int dropped = Math.min(count, size);
+            System.arraycopy(data, dropped, data, 0, size - dropped);
+            size -= dropped;
+            return dropped;
         }
     }
 }

@@ -3,70 +3,64 @@ package dev.streamable.compositor;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.streamable.StreamAbleLog;
 import dev.streamable.browser.BrowserHandle;
 import dev.streamable.browser.BrowserSourceManager;
 import dev.streamable.source.BrowserSource;
 import dev.streamable.source.SourceList;
 import dev.streamable.source.transform.SourceTransform;
+import dev.streamable.video.OutputTransform;
+import dev.streamable.video.Resolution;
+import dev.streamable.video.ScalingMode;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.opengl.GL15;
-import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Builds the final program frame that recordings and streams actually receive.
- *
- * <p>The naive approach - capture Minecraft's framebuffer, then draw browser
- * sources on the local screen afterwards - produces overlays that the streamer
- * can see but viewers cannot. This class avoids that by compositing into its
- * own off-screen framebuffer:</p>
+ * Builds the program frames that recordings and streams actually receive.
  *
  * <pre>
- *   Minecraft main render target
- *            |
+ *   Minecraft main render target (any size, e.g. 3440x1440)
+ *            |  game scaling (Fit / Fill / Native ...) via OutputTransform
  *            v
- *   [ program framebuffer ]  &lt;- browser sources drawn here, in z-order
- *            |
- *            +--&gt; PBO readback --&gt; recorder / streamer
+ *   [ program canvas FBO ]  &lt;- browser sources drawn here, in z-order,
+ *            |                  in canvas coordinates
+ *            +--&gt; OutputCapture (recording size) --&gt; recorder
+ *            +--&gt; OutputCapture (stream size)    --&gt; encoder groups
  * </pre>
  *
  * <p>Because the output frame is assembled separately from the visible screen,
  * a source can appear on stream but not locally (or the reverse) simply by
- * changing its {@link dev.streamable.source.OutputRouting}.</p>
+ * changing its {@link dev.streamable.source.OutputRouting}. When recording and
+ * streaming routings differ for some visible source, a second canvas is
+ * composed for the stream; otherwise both outputs share one.</p>
  *
- * <p>Readback uses two pixel-buffer objects in a ping-pong pattern so
- * {@code glReadPixels} never stalls the render thread waiting for the GPU; the
- * cost is that the returned frame is one frame behind, which is irrelevant for
- * recording and streaming.</p>
+ * <h2>Keeping the Studio out of the broadcast</h2>
+ * <p>The frame is captured at the end of the game's render pass, which includes
+ * the HUD and any open screen - that is what viewers expect for the HUD. For
+ * Stream-able's own screens (the Studio shows stream settings) the compositor
+ * can instead keep using the last game frame captured before the screen
+ * opened, while browser sources keep updating.</p>
  */
 public final class ProgramCompositor implements AutoCloseable {
 
-    private static final int BYTES_PER_PIXEL = 3;
-
     private final GlQuadRenderer quadRenderer = new GlQuadRenderer();
-    private final int[] pboIds = new int[2];
 
-    private ProgramCanvas canvas = ProgramCanvas.DEFAULT;
-    private int framebufferId;
-    private int colorTextureId;
-    private int pboWriteIndex;
-    private boolean hasPendingFrame;
-    private boolean pboSupported = true;
+    private ProgramTarget program;
+    private ProgramTarget streamProgram;
+    private ProgramTarget gameSnapshot;
+    private boolean snapshotValid;
     private boolean broken;
 
     /** Chromium delivers premultiplied alpha; overridable if a CEF build differs. */
     private boolean premultipliedBrowserAlpha = true;
 
-    public ProgramCanvas canvas() {
-        return canvas;
-    }
+    // ---- diagnostics ----
+    private volatile double composeMillis = -1;
 
     /** The shared GL program, so the editor overlay draws through the same path. */
     public GlQuadRenderer quadRenderer() {
@@ -81,12 +75,22 @@ public final class ProgramCompositor implements AutoCloseable {
         return !broken;
     }
 
+    public Resolution canvas() {
+        return program == null ? null : program.size();
+    }
+
+    /** Average GPU-command time for one composition, in milliseconds (CPU side). */
+    public double composeMillis() {
+        return composeMillis;
+    }
+
     /**
-     * Ensures the framebuffer exists at the requested canvas size.
+     * Ensures the canvas framebuffers exist at the requested size, releasing
+     * stale ones after a canvas change.
      *
      * @return {@code true} when the compositor is ready to draw
      */
-    public boolean ensureTarget(ProgramCanvas requested) {
+    public boolean ensureCanvas(Resolution canvas, boolean separateStreamCanvas) {
         if (broken) {
             return false;
         }
@@ -94,68 +98,118 @@ public final class ProgramCompositor implements AutoCloseable {
             broken = true;
             return false;
         }
-        if (framebufferId != 0 && requested.equals(canvas)) {
-            return true;
-        }
-        releaseTarget();
-        canvas = requested;
-
-        int prevFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
-        int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         try {
-            colorTextureId = GL11.glGenTextures();
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, colorTextureId);
-            GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, canvas.width(), canvas.height(),
-                    0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
-            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
-
-            framebufferId = GL30.glGenFramebuffers();
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebufferId);
-            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
-                    GL11.GL_TEXTURE_2D, colorTextureId, 0);
-
-            int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
-            if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
-                throw new IllegalStateException("Incomplete framebuffer: 0x" + Integer.toHexString(status));
+            if (program == null || !program.size().equals(canvas)) {
+                closeTargets();
+                program = ProgramTarget.create(canvas, "Stream-able program canvas");
+                StreamAbleLog.COMPOSITOR.info("Program canvas ready at {}", canvas.label());
             }
-            StreamAbleLog.COMPOSITOR.info("Program canvas ready at {}x{}", canvas.width(), canvas.height());
+            if (separateStreamCanvas && streamProgram == null) {
+                streamProgram = ProgramTarget.create(canvas, "Stream-able stream canvas");
+            } else if (!separateStreamCanvas && streamProgram != null) {
+                streamProgram.close();
+                streamProgram = null;
+            }
             return true;
         } catch (RuntimeException e) {
-            StreamAbleLog.COMPOSITOR.error("Could not create the program framebuffer", e);
+            StreamAbleLog.COMPOSITOR.error("Could not create the program canvas at {}", canvas.label(), e);
             broken = true;
-            releaseTarget();
+            closeTargets();
             return false;
-        } finally {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFramebuffer);
-            GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTexture);
         }
     }
 
+    /** Legacy entry point used by the local overlay path. */
+    public boolean ensureTarget(ProgramCanvas requested) {
+        return ensureCanvas(requested.resolution(), streamProgram != null);
+    }
+
+    /** The main render target's colour texture and size, or {@code null}. */
+    private static GameTexture gameTexture() {
+        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
+        if (target == null) {
+            return null;
+        }
+        GpuTexture texture = target.getColorTexture();
+        if (!(texture instanceof GlTexture gl) || target.width <= 0 || target.height <= 0) {
+            return null;
+        }
+        Resolution size = Resolution.tryOf(target.width, target.height);
+        return size == null ? null : new GameTexture(gl.glId(), size);
+    }
+
+    private record GameTexture(int id, Resolution size) {
+    }
+
     /**
-     * Renders the game plus the selected sources into the program framebuffer.
-     *
-     * @param sources  all configured sources, in z-order
-     * @param browsers live browsers keyed by source id
-     * @param include  routing filter, e.g. {@code s -> s.routing().includeInStream()}
+     * Copies the current game frame aside so it can stand in while a
+     * Stream-able screen is open. Cheap: one GPU blit.
      */
-    public void composeProgramFrame(SourceList sources, BrowserSourceManager browsers,
-                                    Predicate<BrowserSource> include) {
-        if (broken || framebufferId == 0) {
+    public void snapshotGame() {
+        GameTexture game = gameTexture();
+        if (game == null || broken) {
             return;
         }
+        try {
+            if (gameSnapshot == null || !gameSnapshot.size().equals(game.size())) {
+                if (gameSnapshot != null) {
+                    gameSnapshot.close();
+                }
+                gameSnapshot = ProgramTarget.create(game.size(), "Stream-able game snapshot");
+            }
+            int prevFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+            int[] prevViewport = new int[4];
+            GL11.glGetIntegerv(GL11.GL_VIEWPORT, prevViewport);
+            try {
+                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, gameSnapshot.framebuffer());
+                GL11.glViewport(0, 0, game.size().width(), game.size().height());
+                // Same orientation in and out: an exact 1:1 copy.
+                quadRenderer.drawTextureRegion(game.id(), 0, 0, game.size().width(), game.size().height(),
+                        0f, 1f, 1f, 0f, game.size().width(), game.size().height(), false, false);
+            } finally {
+                GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFramebuffer);
+                GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+            }
+            snapshotValid = true;
+        } catch (RuntimeException e) {
+            // The snapshot is a privacy nicety; losing it must not stop capture.
+            StreamAbleLog.COMPOSITOR.debug("Game snapshot unavailable: {}", e.toString());
+            snapshotValid = false;
+        }
+    }
+
+    public boolean hasGameSnapshot() {
+        return snapshotValid;
+    }
+
+    /**
+     * Renders the game plus the selected sources into the program canvas.
+     *
+     * @param forStream   compose into the separate stream canvas (when routings differ)
+     * @param gameScaling how the game frame maps onto the canvas
+     * @param useSnapshot draw the frozen game snapshot instead of the live frame
+     */
+    public void composeProgramFrame(SourceList sources, BrowserSourceManager browsers,
+                                    Predicate<BrowserSource> include, boolean forStream,
+                                    ScalingMode gameScaling, boolean useSnapshot) {
+        ProgramTarget target = forStream && streamProgram != null ? streamProgram : program;
+        if (broken || target == null) {
+            return;
+        }
+        long start = System.nanoTime();
+        Resolution canvas = target.size();
         int prevFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int[] prevViewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, prevViewport);
+        float[] clear = new float[4];
+        GL11.glGetFloatv(GL11.GL_COLOR_CLEAR_VALUE, clear);
         try {
-            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, framebufferId);
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, target.framebuffer());
             GL11.glViewport(0, 0, canvas.width(), canvas.height());
             GL11.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
 
-            drawGameFrame();
+            drawGameFrame(canvas, gameScaling, useSnapshot && snapshotValid);
             drawSources(sources, browsers, include, canvas.width(), canvas.height(), null);
         } catch (RuntimeException e) {
             StreamAbleLog.COMPOSITOR.error("Failed to compose the program frame", e);
@@ -163,23 +217,33 @@ public final class ProgramCompositor implements AutoCloseable {
         } finally {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFramebuffer);
             GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+            GL11.glClearColor(clear[0], clear[1], clear[2], clear[3]);
         }
+        double millis = (System.nanoTime() - start) / 1e6;
+        composeMillis = composeMillis < 0 ? millis : composeMillis * 0.9 + millis * 0.1;
     }
 
-    /** Draws Minecraft's finished frame, scaled to fill the canvas. */
-    private void drawGameFrame() {
-        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
-        if (target == null) {
-            return;
+    /** Draws Minecraft's frame into the canvas according to the game scaling mode. */
+    private void drawGameFrame(Resolution canvas, ScalingMode gameScaling, boolean useSnapshot) {
+        int textureId;
+        Resolution size;
+        if (useSnapshot) {
+            textureId = gameSnapshot.textureId();
+            size = gameSnapshot.size();
+        } else {
+            GameTexture game = gameTexture();
+            if (game == null) {
+                return;
+            }
+            textureId = game.id();
+            size = game.size();
         }
-        GpuTexture texture = target.getColorTexture();
-        if (!(texture instanceof GlTexture gl)) {
-            return;
-        }
-        // Minecraft's render target uses the OpenGL bottom-left origin, so it is
-        // sampled flipped to appear upright on our top-left-origin canvas.
-        quadRenderer.draw(gl.glId(), SourceTransform.of(0, 0, canvas.width(), canvas.height()),
-                canvas.width(), canvas.height(), 1.0f, true, false);
+        OutputTransform transform = OutputTransform.compute(size, canvas, gameScaling);
+        float[] uv = transform.sourceUv();
+        // Both textures are stored bottom-up: canvas-top maps to v = 1.
+        quadRenderer.drawTextureRegion(textureId, transform.dstX(), transform.dstY(), transform.dstW(),
+                transform.dstH(), uv[0], 1f - uv[1], uv[2], 1f - uv[3], canvas.width(), canvas.height(),
+                false, false);
     }
 
     /**
@@ -229,150 +293,47 @@ public final class ProgramCompositor implements AutoCloseable {
      *
      * <p>Called at the end of the frame with Minecraft's own framebuffer bound,
      * so this is what the player sees. Sources whose routing excludes local
-     * display are skipped here but still reach
-     * {@link #composeProgramFrame}.</p>
+     * display are skipped here but still reach the program canvas.</p>
      */
-    public void renderToScreen(SourceList sources, BrowserSourceManager browsers,
+    public void renderToScreen(SourceList sources, BrowserSourceManager browsers, Resolution canvas,
                                int screenWidth, int screenHeight) {
-        if (broken || !quadRenderer.isUsable()) {
+        if (broken || !quadRenderer.initialise()) {
             return;
         }
-        ProgramCanvas.Mapping mapping = canvas.mappingTo(screenWidth, screenHeight);
-        drawSources(sources, browsers, s -> s.routing().showLocally(),
-                screenWidth, screenHeight, mapping);
+        ProgramCanvas.Mapping mapping = new ProgramCanvas(canvas).mappingTo(screenWidth, screenHeight);
+        drawSources(sources, browsers, s -> s.routing().showLocally(), screenWidth, screenHeight, mapping);
     }
 
-    /** The mapping from canvas space onto the given screen, for input routing. */
-    public ProgramCanvas.Mapping screenMapping(int screenWidth, int screenHeight) {
-        return canvas.mappingTo(screenWidth, screenHeight);
+    /** Texture of a composed canvas, for output capture. */
+    public int programTexture(boolean forStream) {
+        ProgramTarget target = forStream && streamProgram != null ? streamProgram : program;
+        return target == null ? 0 : target.textureId();
     }
 
-    /**
-     * Reads the composed frame back as top-down RGB bytes.
-     *
-     * @return pixels ready for FFmpeg, or {@code null} while the async readback
-     * is still warming up (the first call after start or resize)
-     */
-    public byte[] readFrame() {
-        if (broken || framebufferId == 0) {
-            return null;
-        }
-        int width = canvas.width();
-        int height = canvas.height();
-        int byteSize = width * height * BYTES_PER_PIXEL;
-
-        int prevFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
-        int prevPbo = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
-        int prevAlignment = GL11.glGetInteger(GL11.GL_PACK_ALIGNMENT);
-        try {
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebufferId);
-            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
-            GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
-
-            if (!pboSupported) {
-                return readSynchronously(width, height, byteSize);
-            }
-            if (pboIds[0] == 0) {
-                initialisePbos(byteSize);
-            }
-            byte[] ready = hasPendingFrame ? mapPendingFrame(width, height, byteSize) : null;
-            submitAsyncRead(width, height, byteSize);
-            return ready;
-        } catch (RuntimeException e) {
-            StreamAbleLog.COMPOSITOR.warn("PBO readback failed; falling back to synchronous read", e);
-            pboSupported = false;
-            deletePbos();
-            try {
-                return readSynchronously(width, height, byteSize);
-            } catch (RuntimeException fallback) {
-                StreamAbleLog.COMPOSITOR.error("Frame readback failed entirely", fallback);
-                return null;
-            }
-        } finally {
-            GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, prevAlignment);
-            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, prevPbo);
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevFramebuffer);
-        }
+    /** The recording/program canvas as a GUI-drawable view, or {@code null}. */
+    public GpuTextureView previewView(boolean forStream) {
+        ProgramTarget target = forStream && streamProgram != null ? streamProgram : program;
+        return target == null ? null : target.view();
     }
 
-    private void initialisePbos(int byteSize) {
-        for (int i = 0; i < pboIds.length; i++) {
-            pboIds[i] = GL15.glGenBuffers();
-            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[i]);
-            GL15.glBufferData(GL21.GL_PIXEL_PACK_BUFFER, byteSize, GL15.GL_STREAM_READ);
+    private void closeTargets() {
+        if (program != null) {
+            program.close();
+            program = null;
         }
-        pboWriteIndex = 0;
-        hasPendingFrame = false;
-    }
-
-    private void submitAsyncRead(int width, int height, int byteSize) {
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[pboWriteIndex]);
-        GL15.glBufferData(GL21.GL_PIXEL_PACK_BUFFER, byteSize, GL15.GL_STREAM_READ);
-        GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, 0L);
-        pboWriteIndex = (pboWriteIndex + 1) % pboIds.length;
-        hasPendingFrame = true;
-    }
-
-    private byte[] mapPendingFrame(int width, int height, int byteSize) {
-        int readIndex = (pboWriteIndex + 1) % pboIds.length;
-        GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[readIndex]);
-        ByteBuffer mapped = GL15.glMapBuffer(GL21.GL_PIXEL_PACK_BUFFER, GL15.GL_READ_ONLY, byteSize, null);
-        if (mapped == null) {
-            return null;
+        if (streamProgram != null) {
+            streamProgram.close();
+            streamProgram = null;
         }
-        try {
-            return flipVertically(mapped, width, height);
-        } finally {
-            GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
-        }
-    }
-
-    private byte[] readSynchronously(int width, int height, int byteSize) {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(byteSize);
-        GL11.glReadPixels(0, 0, width, height, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, buffer);
-        return flipVertically(buffer, width, height);
-    }
-
-    /**
-     * OpenGL returns rows bottom-up; FFmpeg's rawvideo expects top-down, so the
-     * rows are reversed on the way out. Copying whole rows keeps this cheap.
-     */
-    private static byte[] flipVertically(ByteBuffer source, int width, int height) {
-        int stride = width * BYTES_PER_PIXEL;
-        byte[] out = new byte[stride * height];
-        for (int row = 0; row < height; row++) {
-            source.position((height - 1 - row) * stride);
-            source.get(out, row * stride, stride);
-        }
-        source.position(0);
-        return out;
-    }
-
-    private void deletePbos() {
-        for (int i = 0; i < pboIds.length; i++) {
-            if (pboIds[i] != 0) {
-                GL15.glDeleteBuffers(pboIds[i]);
-                pboIds[i] = 0;
-            }
-        }
-        hasPendingFrame = false;
-    }
-
-    private void releaseTarget() {
-        if (framebufferId != 0) {
-            GL30.glDeleteFramebuffers(framebufferId);
-            framebufferId = 0;
-        }
-        if (colorTextureId != 0) {
-            GL11.glDeleteTextures(colorTextureId);
-            colorTextureId = 0;
-        }
-        deletePbos();
     }
 
     @Override
     public void close() {
-        releaseTarget();
+        closeTargets();
+        if (gameSnapshot != null) {
+            gameSnapshot.close();
+            gameSnapshot = null;
+        }
         quadRenderer.close();
     }
 }

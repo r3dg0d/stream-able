@@ -2,7 +2,6 @@ package dev.streamable.recording;
 
 import dev.streamable.StreamAbleLog;
 import dev.streamable.audio.AudioMixer;
-import dev.streamable.audio.GameAudioTap;
 import dev.streamable.audio.WavFileWriter;
 import dev.streamable.config.RecordingSettings;
 import dev.streamable.ffmpeg.AudioProfile;
@@ -10,64 +9,79 @@ import dev.streamable.ffmpeg.FFmpegCapabilityProbe;
 import dev.streamable.ffmpeg.FFmpegCommandBuilder;
 import dev.streamable.ffmpeg.FFmpegManager;
 import dev.streamable.ffmpeg.FFmpegProcess;
+import dev.streamable.ffmpeg.FFmpegProcesses;
 import dev.streamable.ffmpeg.RateControl;
 import dev.streamable.ffmpeg.VideoEncoder;
 import dev.streamable.ffmpeg.VideoProfile;
+import dev.streamable.pipeline.PooledFrame;
+import dev.streamable.video.OutputValidation;
+import dev.streamable.video.Resolution;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The local recording state machine.
  *
  * <p>Fully independent of {@code StreamController}: stopping a recording never
  * touches a running broadcast, and a broadcast failure never affects the file on
- * disk. The two only share the composed program frame.</p>
+ * disk. They share the composed program canvas, but each has its own output
+ * resolution, scaling mode and frame rate.</p>
  *
  * <h2>Two-pass audio, kept from Record-able</h2>
  * <p>Video is encoded live from raw frames on stdin; audio is captured in
- * parallel to a WAV file and muxed in when the recording stops, offset by the
- * <em>measured</em> gap between the video and audio start instants. The real
- * offset is only knowable once both have actually begun, so applying it at mux
- * time is what keeps long recordings from drifting. Streaming cannot use this
- * approach - there is no "afterwards" - which is why it has its own live audio
- * path.</p>
+ * parallel to WAV and muxed in when the recording stops, offset by the
+ * <em>measured</em> gap between the first video frame and the first audio
+ * sample. The audio comes from the clocked program mixer - the same processed
+ * microphone the stream gets - so byte counts are exactly proportional to
+ * elapsed time and long recordings do not drift. With "separate tracks" the
+ * processed microphone is additionally written to its own track.</p>
  */
 public final class RecordingController {
 
     public enum State { IDLE, STARTING, RECORDING, PAUSED, STOPPING }
 
-    private static final DateTimeFormatter FILE_TIMESTAMP =
-            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private final FFmpegManager ffmpeg;
     private final FFmpegCapabilityProbe probe;
     private final Path gameDirectory;
+    private final AudioMixer mixer;
 
     private volatile State state = State.IDLE;
     private volatile String lastError = "";
     private FFmpegProcess process;
-    private WavFileWriter audioWriter;
-    private OutputStream audioTapConsumer;
+    private WavFileWriter programWriter;
+    private WavFileWriter microphoneWriter;
+    private Consumer<byte[]> programSink;
+    private Consumer<byte[]> microphoneSink;
+    private Path directory;
     private Path videoFile;
     private Path finalFile;
     private VideoProfile activeVideoProfile;
     private AudioProfile activeAudioProfile;
-    private long videoStartNanos;
-    private long audioStartNanos;
+    private int audioDelayMs;
+    private volatile long videoStartNanos;
+    private volatile long programAudioStartNanos;
+    private volatile long microphoneAudioStartNanos;
     private long startedAtMillis;
     private long pausedAtMillis;
     private long pausedTotalMillis;
+    private long maxFileSizeBytes;
+    private boolean autoStopAtMaxSize;
+    private volatile boolean stopRequestedBySizeLimit;
 
-    public RecordingController(FFmpegManager ffmpeg, FFmpegCapabilityProbe probe, Path gameDirectory) {
+    public RecordingController(FFmpegManager ffmpeg, FFmpegCapabilityProbe probe, Path gameDirectory, AudioMixer mixer) {
         this.ffmpeg = ffmpeg;
         this.probe = probe;
         this.gameDirectory = gameDirectory;
+        this.mixer = mixer;
     }
 
     public State state() {
@@ -90,20 +104,20 @@ public final class RecordingController {
         return finalFile;
     }
 
+    public VideoProfile activeVideoProfile() {
+        return activeVideoProfile;
+    }
+
     /**
-     * The output directory.
-     *
-     * <p>Defaults to Record-able's {@code recordings} folder so an upgrading
-     * player's existing videos are simply there, already listed, with nothing
-     * moved or renamed.</p>
+     * The output directory. Defaults to Record-able's {@code recordings}
+     * folder so an upgrading player's existing videos are simply there.
      */
     public Path outputDirectory(RecordingSettings settings) {
         String configured = settings.outputDirectory;
-        Path directory = configured == null || configured.isBlank()
+        Path path = configured == null || configured.isBlank()
                 ? gameDirectory.resolve("recordings")
                 : Path.of(configured);
-        return directory.isAbsolute() ? directory.normalize()
-                : gameDirectory.resolve(directory).normalize();
+        return path.isAbsolute() ? path.normalize() : gameDirectory.resolve(path).normalize();
     }
 
     public long elapsedMillis() {
@@ -114,24 +128,35 @@ public final class RecordingController {
         return Math.max(0, now - startedAtMillis - pausedTotalMillis);
     }
 
+    /** The encoder a recording would use, resolved without starting anything. */
+    public VideoEncoder plannedEncoder(RecordingSettings settings) {
+        return probe.resolve(settings.encoder, false);
+    }
+
     /**
-     * Starts recording.
+     * Validates, then starts recording.
      *
-     * @param width  program canvas width
-     * @param height program canvas height
+     * @param output the recording output resolution (already resolved against the canvas)
      * @return {@code null} on success, or a user-facing error message
      */
-    public String start(RecordingSettings settings, int width, int height) {
+    public String start(RecordingSettings settings, Resolution output) {
         if (state != State.IDLE) {
             return "A recording is already running.";
         }
         if (!ffmpeg.isAvailable()) {
-            lastError = "FFmpeg is not available. Install it from the Stream-able settings first.";
+            lastError = "FFmpeg is not ready yet. Stream-able is installing it - see Runtime for progress.";
             return lastError;
+        }
+        VideoEncoder encoder = probe.resolve(settings.encoder, false);
+        String invalid = OutputValidation.firstError(
+                OutputValidation.validate(output, settings.fps, encoder, OutputValidation.Target.RECORDING));
+        if (invalid != null) {
+            lastError = invalid;
+            return invalid;
         }
         state = State.STARTING;
         try {
-            Path directory = outputDirectory(settings);
+            directory = outputDirectory(settings);
             Files.createDirectories(directory);
 
             String stamp = LocalDateTime.now().format(FILE_TIMESTAMP);
@@ -139,41 +164,37 @@ public final class RecordingController {
             videoFile = directory.resolve("stream-able-" + stamp + "-video." + extension);
             finalFile = directory.resolve("stream-able-" + stamp + "." + extension);
 
-            // Recording may use codecs a livestream would reject, so encoder
-            // detection is not restricted to stream-safe options here.
-            VideoEncoder encoder = probe.resolve(settings.encoder, false);
-            // Output resolution comes from the settings; the canvas size passed
-            // in is the capture size and is handled by the scale filter.
-            activeVideoProfile = new VideoProfile(encoder,
-                    settings.width > 0 ? settings.width : width,
-                    settings.height > 0 ? settings.height : height,
-                    settings.fps,
-                    settings.rateControl == null ? RateControl.CONSTANT_QUALITY : settings.rateControl,
-                    settings.bitrateKbps, settings.bitrateKbps, settings.bitrateKbps * 2,
-                    2.0, VideoProfile.defaultPresetFor(encoder), "high", 2);
-            activeAudioProfile = new AudioProfile(settings.audioCodec,
-                    settings.audioBitrateKbps, settings.audioSampleRate, 2);
+            RateControl rateControl = settings.rateControl == null ? RateControl.CONSTANT_QUALITY : settings.rateControl;
+            activeVideoProfile = new VideoProfile(encoder, output.width(), output.height(), settings.fps,
+                    rateControl, settings.bitrateKbps, settings.bitrateKbps, settings.bitrateKbps * 2,
+                    2.0, VideoProfile.defaultPresetFor(encoder), "high", 2,
+                    VideoProfile.qualityFromSlider(settings.qualityPreset));
+            activeAudioProfile = new AudioProfile(settings.audioCodec, settings.audioBitrateKbps,
+                    settings.audioSampleRate, 2);
+            audioDelayMs = settings.audioDelayMs;
+            maxFileSizeBytes = settings.maxFileSizeMb > 0 ? settings.maxFileSizeMb * 1_048_576L : 0;
+            autoStopAtMaxSize = settings.autoStopAtMaxSize;
+            stopRequestedBySizeLimit = false;
 
             List<String> command = FFmpegCommandBuilder.buildRecordingCommand(
-                    ffmpeg.executable(), activeVideoProfile, width, height,
+                    ffmpeg.executable(), activeVideoProfile, output.width(), output.height(),
                     videoFile.toAbsolutePath().toString());
-
             process = new FFmpegProcess(command, 120);
             process.setOnUnexpectedExit(() -> {
-                lastError = "The recording encoder stopped unexpectedly.";
+                lastError = "The recording encoder stopped unexpectedly: " + process.lastError();
                 StreamAbleLog.RECORDING.warn(lastError);
             });
             process.start();
-            videoStartNanos = System.nanoTime();
+            videoStartNanos = 0;   // set by the first frame actually captured
 
-            startAudioCapture(settings, directory, stamp);
+            startAudioCapture(settings, stamp);
 
             startedAtMillis = System.currentTimeMillis();
             pausedTotalMillis = 0;
             state = State.RECORDING;
             lastError = "";
-            StreamAbleLog.RECORDING.info("Recording started: {} ({}x{} @ {} fps, {})",
-                    finalFile.getFileName(), width, height, settings.fps, encoder.displayName());
+            StreamAbleLog.RECORDING.info("Recording started: {} ({} @ {} fps, {})",
+                    finalFile.getFileName(), output.label(), settings.fps, encoder.displayName());
             return null;
         } catch (IOException | RuntimeException e) {
             lastError = "Could not start recording: " + e.getMessage();
@@ -183,35 +204,62 @@ public final class RecordingController {
         }
     }
 
-    private void startAudioCapture(RecordingSettings settings, Path directory, String stamp) {
-        if (!settings.captureGameAudio) {
+    private void startAudioCapture(RecordingSettings settings, String stamp) {
+        if (!settings.captureGameAudio && !settings.captureMicrophone && !settings.captureVoiceChat) {
             return;
         }
         try {
-            Path audioFile = directory.resolve("stream-able-" + stamp + "-audio.wav");
-            audioWriter = new WavFileWriter(audioFile, AudioMixer.SAMPLE_RATE, AudioMixer.CHANNELS, 16);
-            // Registered through the tap so a simultaneous broadcast keeps its
-            // own copy of the game audio.
-            audioTapConsumer = audioWriter.asOutputStream();
-            GameAudioTap.getInstance().addConsumer(audioTapConsumer);
-            audioStartNanos = System.nanoTime();
-            StreamAbleLog.RECORDING.debug("Audio capture started {} ms after video.",
-                    (audioStartNanos - videoStartNanos) / 1_000_000L);
+            programWriter = new WavFileWriter(directory.resolve("stream-able-" + stamp + "-audio.wav"),
+                    AudioMixer.SAMPLE_RATE, AudioMixer.CHANNELS, 16);
+            programSink = pcm -> writeAudio(programWriter, pcm, true);
+            mixer.addSink(programSink);
+            if (settings.separateAudioTracks && settings.captureMicrophone) {
+                microphoneWriter = new WavFileWriter(directory.resolve("stream-able-" + stamp + "-mic.wav"),
+                        AudioMixer.SAMPLE_RATE, AudioMixer.CHANNELS, 16);
+                microphoneSink = pcm -> writeAudio(microphoneWriter, pcm, false);
+                mixer.addBusSink(dev.streamable.audio.AudioBus.Kind.MICROPHONE, microphoneSink);
+            }
         } catch (IOException | RuntimeException e) {
             // A missing audio device must not abort the recording.
-            StreamAbleLog.RECORDING.warn("Game audio capture unavailable; recording video only", e);
-            audioWriter = null;
+            StreamAbleLog.RECORDING.warn("Audio capture unavailable; recording video only", e);
+            detachAudio();
         }
     }
 
-    /** Queues a composed frame. Never blocks the render thread. */
-    public void submitFrame(byte[] frame) {
+    /** Runs on the mixer clock thread. The first write stamps the track's start time. */
+    private void writeAudio(WavFileWriter writer, byte[] pcm, boolean program) {
+        if (writer == null || state == State.PAUSED) {
+            return;
+        }
+        long now = System.nanoTime();
+        try {
+            if (writer.isEmpty()) {
+                // The block covers the 20 ms before "now"; its first sample is that far back.
+                long blockNanos = pcm.length / (long) (AudioMixer.CHANNELS * AudioMixer.BYTES_PER_SAMPLE)
+                        * 1_000_000_000L / AudioMixer.SAMPLE_RATE;
+                if (program) {
+                    programAudioStartNanos = now - blockNanos;
+                } else {
+                    microphoneAudioStartNanos = now - blockNanos;
+                }
+            }
+            writer.write(pcm, 0, pcm.length);
+        } catch (IOException e) {
+            StreamAbleLog.RECORDING.warn("Audio track write failed: {}", e.toString());
+        }
+    }
+
+    /** Queues a captured frame standing for {@code repeat} output frames. Never blocks. */
+    public void submitFrame(PooledFrame frame, int repeat) {
         if (state != State.RECORDING || frame == null) {
             return;
         }
         FFmpegProcess current = process;
         if (current != null) {
-            current.offerFrame(frame);
+            if (videoStartNanos == 0) {
+                videoStartNanos = frame.captureNanos();
+            }
+            current.offerFrame(frame, repeat);
         }
     }
 
@@ -229,6 +277,17 @@ public final class RecordingController {
         }
     }
 
+    /** Client-tick housekeeping: file-size limit. */
+    public boolean tick() {
+        if (state == State.RECORDING && maxFileSizeBytes > 0 && autoStopAtMaxSize
+                && currentFileSizeBytes() >= maxFileSizeBytes && !stopRequestedBySizeLimit) {
+            stopRequestedBySizeLimit = true;
+            lastError = "Recording stopped at the configured size limit.";
+            return true;   // caller stops through the runtime so audio and outputs detach too
+        }
+        return false;
+    }
+
     /**
      * Stops recording and muxes the audio in.
      *
@@ -242,17 +301,12 @@ public final class RecordingController {
         try {
             if (process != null) {
                 process.stop();
-                process = null;
             }
-            if (audioTapConsumer != null) {
-                GameAudioTap.getInstance().removeConsumer(audioTapConsumer);
-                audioTapConsumer = null;
+            List<WavFileWriter> writers = detachAudio();
+            for (WavFileWriter writer : writers) {
+                writer.close();
             }
-            if (audioWriter != null) {
-                audioWriter.close();
-            }
-
-            Path result = muxAudioIfPresent();
+            Path result = muxAudioIfPresent(writers);
             StreamAbleLog.RECORDING.info("Recording finished: {}", result == null ? "no output" : result.getFileName());
             return result;
         } catch (IOException | RuntimeException e) {
@@ -260,48 +314,80 @@ public final class RecordingController {
             StreamAbleLog.RECORDING.error("Failed to finalise recording", e);
             return videoFile;
         } finally {
-            audioWriter = null;
+            process = null;
             state = State.IDLE;
             startedAtMillis = 0;
         }
     }
 
+    private List<WavFileWriter> detachAudio() {
+        if (programSink != null) {
+            mixer.removeSink(programSink);
+            programSink = null;
+        }
+        if (microphoneSink != null) {
+            mixer.removeBusSink(dev.streamable.audio.AudioBus.Kind.MICROPHONE, microphoneSink);
+            microphoneSink = null;
+        }
+        List<WavFileWriter> writers = new ArrayList<>();
+        if (programWriter != null) {
+            writers.add(programWriter);
+        }
+        if (microphoneWriter != null) {
+            writers.add(microphoneWriter);
+        }
+        programWriter = null;
+        microphoneWriter = null;
+        return writers;
+    }
+
     /**
-     * Runs the final remux, shifting audio by the measured start gap.
+     * The {@code -itsoffset} for an audio track.
      *
-     * <p>A positive {@code -itsoffset} delays audio; because capture always
-     * starts after the encoder, the correction is negative by that gap, plus
-     * whatever manual nudge the user configured.</p>
+     * <p>FFmpeg's {@code -itsoffset} <em>delays</em> the input it precedes. The
+     * first video frame defines t=0; an audio track whose first sample was
+     * captured {@code gap} seconds later must therefore be delayed by
+     * {@code +gap}, plus the user's manual nudge (positive = later audio).</p>
      */
-    private Path muxAudioIfPresent() {
-        if (audioWriter == null || audioWriter.isEmpty()) {
-            if (audioWriter != null) {
-                StreamAbleLog.RECORDING.info("No audio was captured; keeping the video-only file.");
+    static double audioOffsetSeconds(long videoStartNanos, long audioStartNanos, int manualDelayMs) {
+        if (videoStartNanos == 0 || audioStartNanos == 0) {
+            return manualDelayMs / 1000.0;
+        }
+        return (audioStartNanos - videoStartNanos) / 1_000_000_000.0 + manualDelayMs / 1000.0;
+    }
+
+    private Path muxAudioIfPresent(List<WavFileWriter> writers) {
+        List<FFmpegCommandBuilder.AudioTrack> tracks = new ArrayList<>();
+        for (WavFileWriter writer : writers) {
+            if (writer.isEmpty()) {
+                continue;
             }
+            boolean program = writer.path().getFileName().toString().endsWith("-audio.wav");
+            long start = program ? programAudioStartNanos : microphoneAudioStartNanos;
+            tracks.add(new FFmpegCommandBuilder.AudioTrack(writer.path().toAbsolutePath().toString(),
+                    audioOffsetSeconds(videoStartNanos, start, audioDelayMs), program ? "Program" : "Microphone"));
+        }
+        if (tracks.isEmpty()) {
             finalFile = videoFile;
             return finalFile;
         }
-        double startGapSeconds = (audioStartNanos - videoStartNanos) / 1_000_000_000.0;
-        List<String> command = FFmpegCommandBuilder.buildMuxCommand(
-                ffmpeg.executable(),
-                videoFile.toAbsolutePath().toString(),
-                audioWriter.path().toAbsolutePath().toString(),
-                activeAudioProfile,
-                -startGapSeconds,
-                finalFile.toAbsolutePath().toString());
+        List<String> command = FFmpegCommandBuilder.buildMuxCommand(ffmpeg.executable(),
+                videoFile.toAbsolutePath().toString(), tracks, activeAudioProfile, finalFile.toAbsolutePath().toString());
         try {
-            Process mux = new ProcessBuilder(command).redirectErrorStream(true).start();
+            Process mux = FFmpegProcesses.builder(command).redirectErrorStream(true).start();
             String output;
             try (var stream = mux.getInputStream()) {
                 output = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
             }
             if (mux.waitFor() == 0 && Files.exists(finalFile)) {
                 Files.deleteIfExists(videoFile);
-                Files.deleteIfExists(audioWriter.path());
+                for (WavFileWriter writer : writers) {
+                    Files.deleteIfExists(writer.path());
+                }
                 return finalFile;
             }
             StreamAbleLog.RECORDING.warn("Audio mux failed; keeping the separate files. Output:\n{}",
-                    output.lines().limit(20).reduce("", (a, b) -> a + System.lineSeparator() + b));
+                    String.join(System.lineSeparator(), output.lines().limit(20).toList()));
             finalFile = videoFile;
             return finalFile;
         } catch (IOException e) {
@@ -317,34 +403,38 @@ public final class RecordingController {
 
     private void cleanupAfterFailure() {
         if (process != null) {
-            process.stop();
+            process.kill();
             process = null;
         }
-        if (audioTapConsumer != null) {
-            GameAudioTap.getInstance().removeConsumer(audioTapConsumer);
-            audioTapConsumer = null;
-        }
-        if (audioWriter != null) {
+        for (WavFileWriter writer : detachAudio()) {
             try {
-                audioWriter.close();
+                writer.close();
             } catch (IOException e) {
-                StreamAbleLog.RECORDING.debug("Error closing the audio file after a failed start", e);
+                StreamAbleLog.RECORDING.debug("Error closing an audio file after a failed start", e);
             }
-            audioWriter = null;
         }
         state = State.IDLE;
     }
 
+    // ---- diagnostics -------------------------------------------------------------
+
+    public FFmpegProcess process() {
+        return process;
+    }
+
     public long framesSubmitted() {
-        return process == null ? 0 : process.framesWritten();
+        FFmpegProcess current = process;
+        return current == null ? 0 : current.framesWritten();
     }
 
     public long framesDropped() {
-        return process == null ? 0 : process.framesDropped();
+        FFmpegProcess current = process;
+        return current == null ? 0 : current.framesDropped();
     }
 
     public double queuePressure() {
-        return process == null ? 0 : process.queuePressure();
+        FFmpegProcess current = process;
+        return current == null ? 0 : current.queuePressure();
     }
 
     public long currentFileSizeBytes() {
@@ -352,6 +442,16 @@ public final class RecordingController {
             return videoFile != null && Files.exists(videoFile) ? Files.size(videoFile) : 0;
         } catch (IOException e) {
             return 0;
+        }
+    }
+
+    /** Bytes free on the recording volume, or {@code -1}. */
+    public long freeDiskBytes() {
+        try {
+            Path dir = directory != null ? directory : gameDirectory;
+            return Files.getFileStore(dir).getUsableSpace();
+        } catch (IOException | RuntimeException e) {
+            return -1;
         }
     }
 }

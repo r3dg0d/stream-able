@@ -1,112 +1,114 @@
 package dev.streamable.pipeline;
 
 /**
- * Decides how many frames to emit, so the encoder receives a constant rate.
+ * Decides how many frames an output owes, so each encoder receives exactly its
+ * own constant rate regardless of how fast the game renders.
  *
  * <h2>Why this is needed</h2>
- * <p>Frames arrive at whatever rate the game renders - 300 fps on a menu, 45 in
- * a busy world - but the encoder is fed raw video declared at a fixed rate and
- * derives every timestamp from the frame <em>count</em>. Handing it one frame
- * per render therefore breaks the timeline in both directions: render faster
- * than the target and the stream plays fast while the queue floods; render
- * slower and it plays in slow motion.</p>
+ * <p>Frames arrive at whatever rate the game renders - 180 fps on a
+ * high-refresh monitor, 45 in a busy world - but the encoder is fed raw video
+ * declared at a fixed rate and derives every timestamp from the frame
+ * <em>count</em>. So the count must equal {@code elapsed x fps} at all times:
+ * a game rendering at 180 fps must not push 180 fps into a 60 fps stream, and a
+ * slow frame must be covered by repeating the previous one.</p>
  *
- * <p>This converts render events into a steady output rate - skipping when the
- * game is ahead, repeating the last frame when it falls behind - so the frame
- * count always matches elapsed time.</p>
+ * <h2>Exact timeline</h2>
+ * <p>Deadlines are computed as {@code start + n * 1e9 / fps} with integer
+ * arithmetic on the frame index rather than by accumulating a rounded interval,
+ * so 60 fps does not drift by the 0.67 ns per frame that a truncated
+ * {@code 16_666_666} ns step would lose. Time is <em>never</em> discarded: after
+ * a stall (world load, shader compile) the owed frames are reported, and the
+ * pipeline emits them as repeats of the last picture. Dropping that time instead
+ * would permanently shift video against the wall-clock-driven audio.</p>
  *
  * <p>Pure and clock-injected, so the behaviour is unit-testable.</p>
  */
 public final class FramePacer {
 
-    /**
-     * Most duplicates emitted for a single render.
-     *
-     * <p>A long stall (world load, shader compile) would otherwise produce a
-     * burst of hundreds of duplicate frames that floods the queue at exactly the
-     * moment the machine is least able to cope.</p>
-     */
-    private static final int MAX_CATCH_UP_FRAMES = 3;
-
-    /** Beyond this much drift, resynchronise instead of trying to catch up. */
-    private static final long RESYNC_THRESHOLD_NANOS = 1_000_000_000L;
-
-    private final long frameIntervalNanos;
-    private long nextFrameDueNanos;
+    private final int fps;
+    private long startNanos;
     private boolean started;
     private long emittedFrames;
-    private long skippedFrames;
-    private long duplicatedFrames;
+    private long skippedRenders;
+    private long repeatedFrames;
+    private long largestCatchUp;
 
     public FramePacer(int fps) {
-        this.frameIntervalNanos = 1_000_000_000L / Math.clamp(fps, 1, 480);
+        this.fps = Math.clamp(fps, 1, 480);
+    }
+
+    public int fps() {
+        return fps;
     }
 
     /**
-     * Restarts the timeline.
-     *
-     * <p>The clock is anchored on the <em>first frame</em> rather than here,
-     * because a session starts when frames start arriving. Anchoring at reset
-     * would leave the pacer owing a frame for the interval before the first one
-     * showed up, and every session would open with a duplicate.</p>
+     * Restarts the timeline. The clock is anchored on the first frame rather
+     * than here, because a session starts when frames start arriving.
      */
     public void reset(long nowNanos) {
         started = false;
-        nextFrameDueNanos = nowNanos;
+        startNanos = nowNanos;
         emittedFrames = 0;
-        skippedFrames = 0;
-        duplicatedFrames = 0;
+        skippedRenders = 0;
+        repeatedFrames = 0;
+        largestCatchUp = 0;
+    }
+
+    /** Frames that should exist by {@code nowNanos}, counting the one at t=0. */
+    private long framesOwedBy(long nowNanos) {
+        long elapsed = Math.max(0, nowNanos - startNanos);
+        // elapsed * fps overflows only after ~600 years at 480 fps.
+        return elapsed * fps / 1_000_000_000L + 1;
     }
 
     /**
-     * How many copies of the current frame the encoder is owed.
+     * How many copies of the current picture the encoder is owed now.
      *
-     * @return {@code 0} when the game is ahead of the target rate and this
-     * render should be skipped, {@code 1} normally, or more to fill a gap
+     * @return {@code 0} when the game is ahead of the output rate and this
+     * render should not be captured, {@code 1} normally, more to cover a gap
      */
     public int framesDue(long nowNanos) {
         if (!started) {
-            // Anchor the timeline on this frame and emit it.
             started = true;
-            nextFrameDueNanos = nowNanos + frameIntervalNanos;
-            emittedFrames++;
+            startNanos = nowNanos;
+            emittedFrames = 1;
             return 1;
         }
-        if (nowNanos < nextFrameDueNanos) {
-            skippedFrames++;
+        long owed = framesOwedBy(nowNanos) - emittedFrames;
+        if (owed <= 0) {
+            skippedRenders++;
             return 0;
         }
-        if (nowNanos - nextFrameDueNanos > RESYNC_THRESHOLD_NANOS) {
-            // A long stall: pick the timeline up from here rather than emitting
-            // a flood of duplicates for time that has already passed.
-            nextFrameDueNanos = nowNanos + frameIntervalNanos;
-            emittedFrames++;
-            return 1;
-        }
-        // Computed rather than looped: with `>=` inside a loop, a render that
-        // lands exactly on the deadline satisfies the condition twice and emits
-        // a spurious duplicate on every perfectly-paced frame.
-        long overshoot = nowNanos - nextFrameDueNanos;
-        int due = (int) Math.min(MAX_CATCH_UP_FRAMES, overshoot / frameIntervalNanos + 1);
-        nextFrameDueNanos += (long) due * frameIntervalNanos;
+        int due = (int) Math.min(owed, Integer.MAX_VALUE);
         emittedFrames += due;
         if (due > 1) {
-            duplicatedFrames += due - 1;
+            repeatedFrames += due - 1;
+            largestCatchUp = Math.max(largestCatchUp, due);
         }
         return due;
+    }
+
+    /** Earliest nanosecond offset (from the timeline start) at which frame {@code index} is due. */
+    public long deadlineOffsetNanos(long index) {
+        return (index * 1_000_000_000L + fps - 1) / fps;
     }
 
     public long emittedFrames() {
         return emittedFrames;
     }
 
-    /** Renders skipped because the game outran the target rate. */
+    /** Renders not captured because the game outran the output rate. */
     public long skippedFrames() {
-        return skippedFrames;
+        return skippedRenders;
     }
 
-    /** Frames repeated to cover a shortfall. */
+    /** Frames repeated because the game rendered slower than the output rate. */
     public long duplicatedFrames() {
-        return duplicatedFrames;
+        return repeatedFrames;
+    }
+
+    /** The longest single catch-up, in frames; a hint that a stall happened. */
+    public long largestCatchUp() {
+        return largestCatchUp;
     }
 }

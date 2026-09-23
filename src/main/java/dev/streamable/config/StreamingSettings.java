@@ -36,6 +36,7 @@ public final class StreamingSettings {
     public List<Destination> destinations = new ArrayList<>();
 
     // ---- video -------------------------------------------------------------
+    /** Legacy (schema 1) stream size; migrated into {@code video.streaming}. */
     public int width = 1920;
     public int height = 1080;
     public int fps = 60;
@@ -70,7 +71,13 @@ public final class StreamingSettings {
 
     /** The encode profile shared by destinations without an override. */
     public EncodeProfile encodeProfile(VideoEncoder resolvedEncoder) {
-        VideoProfile video = new VideoProfile(resolvedEncoder, width, height, fps, rateControl,
+        return encodeProfile(resolvedEncoder, new dev.streamable.video.Resolution(
+                Math.max(16, width), Math.max(16, height)));
+    }
+
+    /** The encode profile at an explicit output resolution (from the video settings). */
+    public EncodeProfile encodeProfile(VideoEncoder resolvedEncoder, dev.streamable.video.Resolution output) {
+        VideoProfile video = new VideoProfile(resolvedEncoder, output.width(), output.height(), fps, rateControl,
                 bitrateKbps, maxBitrateKbps, bufferSizeKbits, keyframeSeconds,
                 preset.isBlank() ? VideoProfile.defaultPresetFor(resolvedEncoder) : preset,
                 h264Profile, bFrames);

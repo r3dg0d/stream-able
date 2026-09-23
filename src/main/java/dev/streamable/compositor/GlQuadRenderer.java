@@ -42,11 +42,15 @@ public final class GlQuadRenderer implements AutoCloseable {
             in vec2 aPos;
             in vec2 aUv;
             uniform vec2 uViewport;
+            uniform int uFlipTarget;
             out vec2 vUv;
             void main() {
-                // Pixel coordinates (origin top-left) to clip space.
+                // Pixel coordinates (origin top-left) to clip space. A flipped
+                // target stores the top row first in memory, so glReadPixels
+                // returns top-down rows and no CPU flip is needed.
+                float y = aPos.y / uViewport.y * 2.0;
                 vec2 ndc = vec2(aPos.x / uViewport.x * 2.0 - 1.0,
-                                1.0 - aPos.y / uViewport.y * 2.0);
+                                uFlipTarget == 1 ? y - 1.0 : 1.0 - y);
                 gl_Position = vec4(ndc, 0.0, 1.0);
                 vUv = aUv;
             }
@@ -81,6 +85,7 @@ public final class GlQuadRenderer implements AutoCloseable {
     private int vao;
     private int vbo;
     private int uViewport;
+    private int uFlipTarget;
     private int uOpacity;
     private int uPremultiplied;
     private int uUseTexture;
@@ -116,6 +121,7 @@ public final class GlQuadRenderer implements AutoCloseable {
             GL20.glDeleteShader(fragment);
 
             uViewport = GL20.glGetUniformLocation(program, "uViewport");
+            uFlipTarget = GL20.glGetUniformLocation(program, "uFlipTarget");
             uOpacity = GL20.glGetUniformLocation(program, "uOpacity");
             uPremultiplied = GL20.glGetUniformLocation(program, "uPremultiplied");
             uUseTexture = GL20.glGetUniformLocation(program, "uUseTexture");
@@ -218,6 +224,43 @@ public final class GlQuadRenderer implements AutoCloseable {
     private void drawQuad(int textureId, Point2[] corners, int targetWidth, int targetHeight,
                           float opacity, boolean flipVertically, boolean premultiplied,
                           boolean useTexture, int argb) {
+        float v0 = flipVertically ? 1.0f : 0.0f;
+        float v1 = flipVertically ? 0.0f : 1.0f;
+        drawQuad(textureId, corners, 0f, v0, 1f, v1, targetWidth, targetHeight, opacity,
+                premultiplied, useTexture, argb, false, true);
+    }
+
+    /**
+     * Draws a sub-rectangle of a texture onto an axis-aligned target rectangle.
+     *
+     * <p>Used by the output scaler: the UV rectangle comes straight from
+     * {@link dev.streamable.video.OutputTransform}, so the GPU samples exactly
+     * the region the geometry maths selected.</p>
+     *
+     * @param u0 texture u at the rectangle's left edge
+     * @param v0 texture v at the rectangle's top edge
+     * @param u1 texture u at the right edge
+     * @param v1 texture v at the bottom edge
+     * @param flipTarget store the top row first, for top-down readback
+     * @param blend      false to overwrite the target (opaque copy)
+     */
+    public void drawTextureRegion(int textureId, double x, double y, double width, double height,
+                                  float u0, float v0, float u1, float v1,
+                                  int targetWidth, int targetHeight, boolean flipTarget, boolean blend) {
+        if (textureId == 0) {
+            return;
+        }
+        Point2[] corners = {
+                new Point2(x, y), new Point2(x + width, y),
+                new Point2(x + width, y + height), new Point2(x, y + height)
+        };
+        drawQuad(textureId, corners, u0, v0, u1, v1, targetWidth, targetHeight, 1.0f,
+                true, true, 0, flipTarget, blend);
+    }
+
+    private void drawQuad(int textureId, Point2[] corners, float u0, float v0, float u1, float v1,
+                          int targetWidth, int targetHeight, float opacity, boolean premultiplied,
+                          boolean useTexture, int argb, boolean flipTarget, boolean blend) {
         if (!isUsable() || opacity <= 0.0f || corners.length < 4) {
             return;
         }
@@ -238,25 +281,28 @@ public final class GlQuadRenderer implements AutoCloseable {
 
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
         int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        // Minecraft 26.x binds sampler objects, which override per-texture
+        // filtering. Unbind for our draw so the texture parameters apply.
+        int prevSampler = GL11.glGetInteger(org.lwjgl.opengl.GL33.GL_SAMPLER_BINDING);
+        org.lwjgl.opengl.GL33.glBindSampler(0, 0);
 
         try {
             GL20.glUseProgram(program);
             GL30.glBindVertexArray(vao);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
 
-            float v0 = flipVertically ? 1.0f : 0.0f;
-            float v1 = flipVertically ? 0.0f : 1.0f;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 FloatBuffer buffer = stack.mallocFloat(16);
-                putVertex(buffer, corners[0], 0.0f, v0);   // top-left
-                putVertex(buffer, corners[1], 1.0f, v0);   // top-right
-                putVertex(buffer, corners[3], 0.0f, v1);   // bottom-left
-                putVertex(buffer, corners[2], 1.0f, v1);   // bottom-right
+                putVertex(buffer, corners[0], u0, v0);   // top-left
+                putVertex(buffer, corners[1], u1, v0);   // top-right
+                putVertex(buffer, corners[3], u0, v1);   // bottom-left
+                putVertex(buffer, corners[2], u1, v1);   // bottom-right
                 buffer.flip();
                 GL15.glBufferSubData(GL15.GL_ARRAY_BUFFER, 0L, buffer);
             }
 
             GL20.glUniform2f(uViewport, targetWidth, targetHeight);
+            GL20.glUniform1i(uFlipTarget, flipTarget ? 1 : 0);
             GL20.glUniform1f(uOpacity, opacity);
             GL20.glUniform1i(uPremultiplied, premultiplied ? 1 : 0);
             GL20.glUniform1i(uUseTexture, useTexture ? 1 : 0);
@@ -276,12 +322,17 @@ public final class GlQuadRenderer implements AutoCloseable {
             GL11.glDisable(GL11.GL_DEPTH_TEST);
             GL11.glDisable(GL11.GL_CULL_FACE);
             GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            GL11.glEnable(GL11.GL_BLEND);
-            // Source is premultiplied by the time it reaches the blender.
-            GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            if (blend) {
+                GL11.glEnable(GL11.GL_BLEND);
+                // Source is premultiplied by the time it reaches the blender.
+                GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            } else {
+                GL11.glDisable(GL11.GL_BLEND);
+            }
 
             GL11.glDrawArrays(GL11.GL_TRIANGLE_STRIP, 0, 4);
         } finally {
+            org.lwjgl.opengl.GL33.glBindSampler(0, prevSampler);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTexture);
             GL13.glActiveTexture(prevActiveTexture);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, prevVbo);

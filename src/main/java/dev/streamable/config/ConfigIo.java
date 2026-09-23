@@ -102,13 +102,17 @@ public final class ConfigIo {
         }
     }
 
-    /** Applies schema migrations in order. Currently a no-op at version 1. */
-    private static void migrate(StreamAbleConfig config) {
+    /** Applies schema migrations in order. */
+    static void migrate(StreamAbleConfig config) {
         repairIvsIngestUrls(config);
         if (config.schemaVersion < 1) {
             // Files written before the schema was versioned: nothing structural
             // changed, so validation alone brings them up to date.
             config.schemaVersion = 1;
+        }
+        if (config.schemaVersion < 2) {
+            migrateToIndependentOutputs(config);
+            config.schemaVersion = 2;
         }
         if (config.schemaVersion > StreamAbleConfig.CURRENT_SCHEMA_VERSION) {
             StreamAbleLog.CORE.warn(
@@ -116,6 +120,52 @@ public final class ConfigIo {
                             + "unknown settings will be preserved where possible.",
                     config.schemaVersion, StreamAbleConfig.CURRENT_SCHEMA_VERSION);
         }
+    }
+
+    /**
+     * Schema 1 had one canvas size in the UI settings and a "width/height" in
+     * both recording and streaming settings, which FFmpeg stretched to. Schema
+     * 2 separates canvas, recording output and streaming output.
+     *
+     * <ul>
+     *   <li>The canvas keeps its old size, so every source stays exactly where
+     *       the player put it.</li>
+     *   <li>Each output keeps its old size. It matches the canvas when the
+     *       sizes were equal; otherwise it uses Fit, because schema 1's
+     *       stretching distorted the picture and must never be chosen
+     *       silently.</li>
+     *   <li>The game is fitted into the canvas for the same reason.</li>
+     * </ul>
+     */
+    static void migrateToIndependentOutputs(StreamAbleConfig config) {
+        VideoSettings video = config.video == null ? new VideoSettings() : config.video;
+        InterfaceSettings ui = config.ui == null ? new InterfaceSettings() : config.ui;
+        video.canvasWidth = ui.canvasWidth;
+        video.canvasHeight = ui.canvasHeight;
+        video.canvasInitialised = true;
+        video.gameScaling = dev.streamable.video.ScalingMode.FIT;
+        if (config.recording != null) {
+            video.recording = outputFrom(config.recording.width, config.recording.height, ui);
+        }
+        if (config.streaming != null) {
+            video.streaming = outputFrom(config.streaming.width, config.streaming.height, ui);
+        }
+        config.video = video;
+        StreamAbleLog.CORE.info("Migrated video settings to schema 2: canvas {}x{}, recording {}, streaming {}.",
+                video.canvasWidth, video.canvasHeight, describe(video.recording), describe(video.streaming));
+    }
+
+    private static VideoSettings.Output outputFrom(int width, int height, InterfaceSettings ui) {
+        VideoSettings.Output output = new VideoSettings.Output();
+        output.width = width;
+        output.height = height;
+        output.matchCanvas = width == ui.canvasWidth && height == ui.canvasHeight;
+        output.mode = output.matchCanvas ? dev.streamable.video.ScalingMode.NATIVE : dev.streamable.video.ScalingMode.FIT;
+        return output;
+    }
+
+    private static String describe(VideoSettings.Output output) {
+        return output.matchCanvas ? "native" : output.width + "x" + output.height + " " + output.mode;
     }
 
     private static void quarantine(Path file) {

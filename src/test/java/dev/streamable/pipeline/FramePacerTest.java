@@ -56,21 +56,52 @@ class FramePacerTest {
     }
 
     @Test
-    @DisplayName("a long stall resynchronises instead of flooding the queue")
-    void longStallDoesNotBurst() {
+    @DisplayName("a stall is covered by repeats so video never falls behind audio")
+    void stallPreservesTheTimeline() {
         FramePacer pacer = new FramePacer(60);
-        pacer.reset(0);
-        // A ten-second freeze would otherwise be worth 600 duplicate frames.
-        int due = pacer.framesDue(10_000 * MS);
-        assertEquals(1, due, "a long stall must not emit a burst");
+        assertEquals(1, pacer.framesDue(0));
+        // A two-second freeze (world load): 120 frames are owed and reported,
+        // rather than silently discarded as the old pacer did.
+        int due = pacer.framesDue(2_000 * MS);
+        assertEquals(120, due);
+        assertEquals(121, pacer.emittedFrames());
+        assertEquals(120, pacer.largestCatchUp());
     }
 
     @Test
-    void catchUpIsBounded() {
+    @DisplayName("180 Hz game into a 60 FPS output: exact count over 30 minutes")
+    void highRefreshGameDoesNotDriftOverLongSessions() {
         FramePacer pacer = new FramePacer(60);
-        pacer.reset(0);
-        // 200 ms gap: 12 frames' worth, but capped.
-        assertTrue(pacer.framesDue(200 * MS) <= 3);
+        long frameCount = 0;
+        long renders = 180L * 60 * 30;                  // 30 minutes at 180 Hz
+        for (long i = 0; i <= renders; i++) {
+            long now = i * 1_000_000_000L / 180;          // exact 180 Hz clock
+            frameCount += pacer.framesDue(now);
+        }
+        assertEquals(60L * 60 * 30 + 1, frameCount, "one frame per 1/60 s, plus the frame at t=0");
+        assertEquals(0, pacer.duplicatedFrames(), "a faster game never needs repeats");
+    }
+
+    @Test
+    void jitteryRendersStillProduceTheExactCount() {
+        FramePacer pacer = new FramePacer(60);
+        java.util.Random random = new java.util.Random(7);
+        long now = 0;
+        long frames = pacer.framesDue(now);
+        while (now < 600_000 * MS) {                     // ten minutes
+            now += (2 + random.nextInt(40)) * MS;         // 2..41 ms between renders
+            frames += pacer.framesDue(now);
+        }
+        assertEquals(now * 60 / 1_000_000_000L + 1, frames);
+    }
+
+    @Test
+    void rendersExactlyOnDeadlinesEmitNoSpuriousDuplicates() {
+        FramePacer pacer = new FramePacer(60);
+        for (long i = 0; i < 6000; i++) {
+            assertEquals(1, pacer.framesDue(pacer.deadlineOffsetNanos(i)), "frame " + i);
+        }
+        assertEquals(0, pacer.duplicatedFrames());
     }
 
     @Test

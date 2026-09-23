@@ -44,6 +44,7 @@ public final class StreamController {
     private EncodeProfile activeProfile;
     private boolean audioEnabled = true;
     private boolean multipleEncodersWarned;
+    private int totalReconnects;
 
     public StreamController(FFmpegManager ffmpeg, FFmpegCapabilityProbe probe) {
         this.ffmpeg = ffmpeg;
@@ -105,8 +106,9 @@ public final class StreamController {
      *
      * @return {@code null} on success, or a user-facing error message
      */
-    public String start(StreamingSettings settings, boolean withAudio,
-                        int sourceWidth, int sourceHeight) {
+    public String start(StreamingSettings settings, boolean withAudio, dev.streamable.video.Resolution output) {
+        int sourceWidth = output.width();
+        int sourceHeight = output.height();
         if (state != State.IDLE) {
             return "A stream is already running.";
         }
@@ -124,7 +126,16 @@ public final class StreamController {
             // Only H.264 is universally accepted by RTMP ingests, so encoder
             // auto-detection is restricted to stream-safe codecs here.
             activeEncoder = probe.resolve(settings.encoder, true);
-            activeProfile = settings.encodeProfile(activeEncoder);
+            String invalidOutput = dev.streamable.video.OutputValidation.firstError(
+                    dev.streamable.video.OutputValidation.validate(output, settings.fps, activeEncoder,
+                            dev.streamable.video.OutputValidation.Target.STREAMING));
+            if (invalidOutput != null) {
+                state = State.IDLE;
+                lastError = invalidOutput;
+                return invalidOutput;
+            }
+            activeProfile = settings.encodeProfile(activeEncoder, output);
+            totalReconnects = 0;
 
             List<DestinationGrouping.Group> planned =
                     DestinationGrouping.group(destinations, activeProfile);
@@ -198,13 +209,17 @@ public final class StreamController {
      * <p>Called on the render thread: it only ever performs a bounded, non-blocking
      * queue offer per group.</p>
      */
-    public void submitFrame(byte[] frame) {
+    public void submitFrame(dev.streamable.pipeline.PooledFrame frame, int repeat) {
         if (state != State.LIVE || frame == null) {
             return;
         }
         for (StreamEncoderGroup group : groups) {
-            group.submitFrame(frame);
+            group.submitFrame(frame, repeat);
         }
+    }
+
+    public EncodeProfile activeProfile() {
+        return activeProfile;
     }
 
     /** Hands a PCM chunk of the program mix to every running encoder. */
@@ -228,6 +243,7 @@ public final class StreamController {
         for (StreamEncoderGroup group : groups) {
             group.tick();
             if (group.isReadyToRetry()) {
+                totalReconnects++;
                 String error = group.retry(audioEnabled);
                 if (error != null) {
                     StreamAbleLog.STREAMING.warn("Reconnect attempt failed: {}", error);
@@ -261,8 +277,8 @@ public final class StreamController {
     public boolean reconnectDestination(UUID destinationId) {
         for (StreamEncoderGroup group : groups) {
             if (group.destinations().stream().anyMatch(d -> d.id().equals(destinationId))) {
-                group.close();
-                return group.retry(audioEnabled) == null;
+                totalReconnects++;
+                return group.restart(audioEnabled) == null;
             }
         }
         return false;
@@ -321,12 +337,34 @@ public final class StreamController {
         }
         long submitted = 0;
         long dropped = 0;
+        long repeated = 0;
         double pressure = 0;
+        double outputKbps = 0;
+        boolean anyRate = false;
+        double encodeFps = -1;
+        double latency = -1;
+        double speed = -1;
         List<StreamHealth.DestinationStatus> statuses = new ArrayList<>();
         for (StreamEncoderGroup group : groups) {
             submitted += group.framesSubmitted();
             dropped += group.framesDropped();
             pressure = Math.max(pressure, group.queuePressure());
+            dev.streamable.ffmpeg.FFmpegProcess process = group.process();
+            if (process != null) {
+                repeated += process.framesRepeatedForTiming();
+                if (process.outputKbps() >= 0) {
+                    outputKbps += process.outputKbps();
+                    anyRate = true;
+                }
+                dev.streamable.ffmpeg.FFmpegProgress progress = process.progress();
+                if (progress.frame() > 0) {
+                    encodeFps = encodeFps < 0 ? progress.fps() : Math.min(encodeFps, progress.fps());
+                    if (progress.speed() >= 0) {
+                        speed = speed < 0 ? progress.speed() : Math.min(speed, progress.speed());
+                    }
+                }
+                latency = Math.max(latency, process.encodeLatencyMillis());
+            }
             for (StreamDestination destination : group.destinations()) {
                 statuses.add(new StreamHealth.DestinationStatus(
                         destination.name(), destination.state(), destination.lastError()));
@@ -342,6 +380,14 @@ public final class StreamController {
                 dropped,
                 pressure,
                 activeEncoder.displayName(),
-                List.copyOf(statuses));
+                List.copyOf(statuses),
+                anyRate ? outputKbps : -1,
+                encodeFps,
+                latency,
+                speed,
+                repeated,
+                totalReconnects,
+                profile == null ? 0 : profile.audio().bitrateKbps(),
+                profile == null ? "" : profile.video().width() + "x" + profile.video().height());
     }
 }

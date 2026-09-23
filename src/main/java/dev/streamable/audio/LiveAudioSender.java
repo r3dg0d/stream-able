@@ -37,13 +37,17 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class LiveAudioSender implements AutoCloseable {
 
-    private static final int QUEUE_CHUNKS = 64;
+    /** ~10 seconds of 20 ms blocks. */
+    private static final int QUEUE_CHUNKS = 500;
+    private static final byte[] SILENCE = new byte[8192];
 
     private final ServerSocket serverSocket;
     private final BlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(QUEUE_CHUNKS);
     private final AtomicBoolean running = new AtomicBoolean(true);
     private final AtomicLong bytesSent = new AtomicLong();
     private final AtomicLong chunksDropped = new AtomicLong();
+    /** Bytes that could not be queued; sent later as silence so the audio clock never shrinks. */
+    private final AtomicLong owedBytes = new AtomicLong();
     private volatile Socket clientSocket;
     private volatile boolean connected;
     private final Thread acceptThread;
@@ -79,8 +83,11 @@ public final class LiveAudioSender implements AutoCloseable {
     }
 
     /**
-     * Queues a PCM chunk. Never blocks the audio thread; a chunk is dropped if
-     * FFmpeg has stalled, which is preferable to backing up the mixer.
+     * Queues a PCM chunk. Never blocks the audio thread. If FFmpeg has stalled
+     * long enough to fill the queue the chunk's content is lost, but its
+     * <em>length</em> is sent later as silence: FFmpeg derives audio timestamps
+     * from the byte count, so dropping bytes outright would shift audio against
+     * video for the rest of the broadcast.
      */
     public void write(byte[] pcm) {
         if (!running.get() || pcm == null || pcm.length == 0) {
@@ -88,7 +95,12 @@ public final class LiveAudioSender implements AutoCloseable {
         }
         if (!queue.offer(pcm)) {
             chunksDropped.incrementAndGet();
+            owedBytes.addAndGet(pcm.length);
         }
+    }
+
+    public long owedBytes() {
+        return owedBytes.get();
     }
 
     private void acceptAndPump() {
@@ -102,6 +114,15 @@ public final class LiveAudioSender implements AutoCloseable {
                 byte[] chunk = queue.poll(200, TimeUnit.MILLISECONDS);
                 if (chunk == null) {
                     continue;
+                }
+                long owed = owedBytes.getAndSet(0);
+                // Keep sample frames aligned (4 bytes = one stereo s16 frame).
+                owed -= owed % 4;
+                while (owed > 0) {
+                    int n = (int) Math.min(owed, SILENCE.length);
+                    out.write(SILENCE, 0, n);
+                    bytesSent.addAndGet(n);
+                    owed -= n;
                 }
                 out.write(chunk);
                 bytesSent.addAndGet(chunk.length);
