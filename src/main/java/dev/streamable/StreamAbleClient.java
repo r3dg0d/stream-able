@@ -74,6 +74,7 @@ public final class StreamAbleClient {
             new dev.streamable.audio.MicrophoneCapture(audioMixer);
     private final RuntimeManager runtimes;
     private final FFmpegRuntime ffmpegRuntime;
+    private final dev.streamable.browser.BrowserRuntime browserRuntime;
     private final FFmpegManager ffmpeg;
     private final FFmpegCapabilityProbe encoderProbe;
     private final RecordingController recording;
@@ -93,6 +94,8 @@ public final class StreamAbleClient {
 
         this.runtimes = RuntimeManager.create(gameDirectory, modVersion());
         this.ffmpegRuntime = runtimes.register(new FFmpegRuntime(runtimes.context()));
+        this.browserRuntime = runtimes.register(new dev.streamable.browser.BrowserRuntime(
+                runtimes.context(), BrowserSourceManager.mcefJcefDirectory()));
         this.ffmpeg = new FFmpegManager(gameDirectory);
         this.ffmpeg.setManagedRuntime(ffmpegRuntime);
         this.ffmpeg.setConfiguredPath(config.runtime.ffmpegOverridePath);
@@ -173,6 +176,17 @@ public final class StreamAbleClient {
         return ffmpegRuntime;
     }
 
+    public dev.streamable.browser.BrowserRuntime browserRuntime() {
+        return browserRuntime;
+    }
+
+    /** Install or retry the browser engine (Runtime page). */
+    public void installBrowserEngine() {
+        config.runtime.browserEngineEnabled = true;
+        markDirty();
+        browsers.retry(true, Minecraft.getInstance());
+    }
+
     public FFmpegManager ffmpeg() {
         return ffmpeg;
     }
@@ -249,7 +263,9 @@ public final class StreamAbleClient {
     // ---- lifecycle ---------------------------------------------------------
 
     public void initialise() {
-        browsers.initialise();
+        runtimes.refreshAllAsync();
+        browsers.initialise(browserRuntime, config.runtime.browserEngineEnabled, config.runtime.autoInstall,
+                Minecraft.getInstance());
         // Plasmo Voice plays through its own OpenAL context, so proximity chat
         // has to be captured through its API rather than the loopback device.
         // Registration is retried on tick because Plasmo Voice may initialise

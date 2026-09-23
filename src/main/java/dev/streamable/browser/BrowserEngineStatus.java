@@ -14,8 +14,10 @@ package dev.streamable.browser;
 public record BrowserEngineStatus(State state, String detail, float percent) {
 
     public enum State {
-        /** MCEF is not installed; browser sources are hidden rather than broken. */
+        /** The browser runtime is not installed yet; browser sources show a placeholder. */
         NOT_INSTALLED,
+        /** Turned off by the player. */
+        DISABLED,
         /** Downloading/extracting/starting Chromium. Sources show a placeholder. */
         INITIALISING,
         /** Ready to create browsers. */
@@ -26,8 +28,18 @@ public record BrowserEngineStatus(State state, String detail, float percent) {
 
     public static final BrowserEngineStatus NOT_INSTALLED = new BrowserEngineStatus(
             State.NOT_INSTALLED,
-            "MCEF Modern is not installed. Browser sources require it; recording and streaming work without it.",
+            "The browser engine has not been installed yet. Recording and streaming work without it.",
             -1);
+
+    public static BrowserEngineStatus disabled() {
+        return new BrowserEngineStatus(State.DISABLED, "Browser sources are turned off in Runtime settings.", -1);
+    }
+
+    /** Download/verify/extract progress from the managed runtime. */
+    public static BrowserEngineStatus fromRuntime(dev.streamable.runtime.RuntimeProgress progress) {
+        float percent = progress.fraction() < 0 ? -1 : (float) (progress.fraction() * 100);
+        return new BrowserEngineStatus(State.INITIALISING, progress.summary(), percent);
+    }
 
     public static BrowserEngineStatus initialising(String stage, float percent) {
         return new BrowserEngineStatus(State.INITIALISING, stage, percent);
@@ -53,6 +65,7 @@ public record BrowserEngineStatus(State state, String detail, float percent) {
     public String shortLabel() {
         return switch (state) {
             case NOT_INSTALLED -> "Browser engine not installed";
+            case DISABLED -> "Browser sources off";
             case INITIALISING -> percent >= 0
                     ? "Starting browser engine... " + Math.round(percent) + "%"
                     : "Starting browser engine...";

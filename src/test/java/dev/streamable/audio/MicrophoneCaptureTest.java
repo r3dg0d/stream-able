@@ -55,7 +55,10 @@ class MicrophoneCaptureTest {
     }
 
     @Test
+    @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "streamable.hardwareTests", matches = "true")
     void deviceEnumerationNeverThrows() {
+        // Touches real audio hardware; on some ALSA setups the native
+        // enumeration blocks indefinitely, so it only runs when asked for.
         assertNotNull(MicrophoneCapture.availableDevices());
     }
 }

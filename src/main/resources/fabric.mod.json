@@ -3,7 +3,7 @@
   "id": "streamable",
   "version": "${version}",
   "name": "Stream-able",
-  "description": "An OBS-like recording, livestreaming and multistreaming studio that runs inside Minecraft, with interactive Chromium browser sources composited over gameplay. Derived from Record-able by JoEusebe.",
+  "description": "A recording, livestreaming and multistreaming studio inside Minecraft: ultrawide-aware program canvas, independent recording and stream outputs, broadcast microphone processing with local AI noise cancellation, a destination tester, and interactive Chromium browser sources. Runtimes (FFmpeg, Chromium, ONNX Runtime) are installed and verified automatically. Derived from Record-able by JoEusebe.",
   "authors": [
     "Stream-able contributors"
   ],
@@ -11,7 +11,8 @@
     "JoEusebe (Record-able, the project this is derived from)"
   ],
   "contact": {
-    "sources": "https://github.com/JoEusebe/record-able"
+    "sources": "https://github.com/r3dg0d/stream-able",
+    "issues": "https://github.com/r3dg0d/stream-able/issues"
   },
   "license": "MIT",
   "icon": "assets/streamable/icon.png",
@@ -31,8 +32,10 @@
     "java": ">=25"
   },
   "suggests": {
-    "mcef-modern": ">=0.3.3",
     "modmenu": "*",
     "plasmovoice": ">=2.1.0"
+  },
+  "custom": {
+    "streamable:bundled": "MCEF Modern (LGPL-2.1) and XZ for Java (0BSD) are bundled as separate Jar-in-Jar libraries; see NOTICE."
   }
 }

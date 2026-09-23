@@ -118,6 +118,8 @@ java {
 // Minecraft, so they run on a plain JVM.
 tasks.named('test', Test) {
     useJUnitPlatform()
+    systemProperty 'streamable.hardwareTests', System.getProperty('streamable.hardwareTests', 'false')
+    timeout = java.time.Duration.ofMinutes(10)
     testLogging {
         events 'passed', 'skipped', 'failed'
         exceptionFormat = 'full'

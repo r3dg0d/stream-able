@@ -36,6 +36,8 @@ public final class BrowserSourceManager implements AutoCloseable {
     private BrowserBackend backend;
     private BrowserEngineStatus statusWhenUnavailable = BrowserEngineStatus.NOT_INSTALLED;
     private boolean initialisationRequested;
+    private BrowserRuntime runtime;
+    private volatile boolean runtimeReady;
 
     private record AppliedState(String url, int width, int height, String css, int fps) {
     }
@@ -53,25 +55,82 @@ public final class BrowserSourceManager implements AutoCloseable {
      * which the preloader handles.</p>
      */
     private static java.nio.file.Path jcefLibraryPath() {
-        return FabricLoader.getInstance().getConfigDir()
-                .resolve(MCEF_MOD_ID).resolve("jcef")
-                .resolve(NativeLibraryDiagnostic.nativeLibraryFileName());
+        return mcefJcefDirectory().resolve(NativeLibraryDiagnostic.nativeLibraryFileName());
+    }
+
+    /** MCEF's native directory ({@code <config>/mcef-modern/jcef}). */
+    public static java.nio.file.Path mcefJcefDirectory() {
+        return FabricLoader.getInstance().getConfigDir().resolve(MCEF_MOD_ID).resolve("jcef");
     }
 
     /**
-     * Starts the browser engine if it is present.
+     * Starts the browser engine: first the verified Chromium natives through
+     * the runtime manager (off the render thread), then MCEF itself on the
+     * client thread once they are in place.
      *
-     * <p>The MCEF-specific class is only referenced inside this method so that
-     * its absence cannot break class loading elsewhere.</p>
+     * <p>Nothing here can take recording, streaming or the game down: every
+     * failure becomes a status line and browser sources show a placeholder.</p>
+     *
+     * @param runtime    the managed JCEF natives
+     * @param enabled    the player's "browser sources" preference
+     * @param autoInstall whether a missing runtime may be downloaded now
+     * @param mainThread executor that runs work on the client thread
      */
-    public void initialise() {
+    public void initialise(BrowserRuntime runtime, boolean enabled, boolean autoInstall,
+                           java.util.concurrent.Executor mainThread) {
         if (initialisationRequested) {
             return;
         }
-        initialisationRequested = true;
+        this.runtime = runtime;
         if (!isEngineInstalled()) {
-            StreamAbleLog.BROWSER.info(
-                    "MCEF Modern not installed - browser sources disabled. Recording and streaming are unaffected.");
+            StreamAbleLog.BROWSER.warn("The bundled MCEF Modern is missing from this installation - "
+                    + "browser sources disabled. Recording and streaming are unaffected.");
+            statusWhenUnavailable = BrowserEngineStatus.failed(
+                    "The bundled browser integration (MCEF Modern) is missing from this installation.");
+            return;
+        }
+        if (!enabled) {
+            statusWhenUnavailable = BrowserEngineStatus.disabled();
+            return;
+        }
+        if (runtime.artifact().isEmpty()) {
+            statusWhenUnavailable = BrowserEngineStatus.failed(runtime.progress().detail());
+            return;
+        }
+        initialisationRequested = true;
+        if (!runtime.isInstalled() && !autoInstall) {
+            statusWhenUnavailable = BrowserEngineStatus.failed(
+                    "Browser engine not installed. Automatic runtime installation is off; install it from Runtime.");
+            initialisationRequested = false;
+            return;
+        }
+        runtime.ensureReady().whenComplete((directory, error) -> {
+            if (error != null) {
+                statusWhenUnavailable = BrowserEngineStatus.failed(runtime.progress().detail());
+                initialisationRequested = false;   // allow a retry from the Runtime page
+                return;
+            }
+            runtimeReady = true;
+            mainThread.execute(this::startEngine);
+        });
+    }
+
+    /** Legacy entry point without runtime management; kept for tests and tooling. */
+    public void initialise() {
+        statusWhenUnavailable = BrowserEngineStatus.failed("Browser engine was not started.");
+    }
+
+    /** Retries after a failure (Runtime page). */
+    public void retry(boolean autoInstall, java.util.concurrent.Executor mainThread) {
+        if (backend != null || runtime == null) {
+            return;
+        }
+        initialisationRequested = false;
+        initialise(runtime, true, true, mainThread);
+    }
+
+    private void startEngine() {
+        if (backend != null) {
             return;
         }
         try {
@@ -93,6 +152,12 @@ public final class BrowserSourceManager implements AutoCloseable {
 
     public BrowserEngineStatus status() {
         if (backend == null) {
+            if (runtime != null && runtime.state().isBusy()) {
+                return BrowserEngineStatus.fromRuntime(runtime.progress());
+            }
+            if (runtimeReady) {
+                return BrowserEngineStatus.initialising("Starting Chromium", -1);
+            }
             return statusWhenUnavailable;
         }
         if (backend instanceof dev.streamable.browser.mcef.McefBrowserBackend mcef) {
