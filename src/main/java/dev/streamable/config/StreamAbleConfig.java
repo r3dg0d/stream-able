@@ -26,6 +26,7 @@ public final class StreamAbleConfig {
     public InterfaceSettings ui = new InterfaceSettings();
     public VideoSettings video = new VideoSettings();
     public RuntimeSettings runtime = new RuntimeSettings();
+    public MicrophoneSettings microphone = new MicrophoneSettings();
     public List<BrowserSourceSettings> browserSources = new ArrayList<>();
 
     /** Set once a legacy Record-able configuration has been imported. */
@@ -47,6 +48,9 @@ public final class StreamAbleConfig {
         if (runtime == null) {
             runtime = new RuntimeSettings();
         }
+        if (microphone == null) {
+            microphone = new MicrophoneSettings();
+        }
         if (browserSources == null) {
             browserSources = new ArrayList<>();
         }
@@ -56,6 +60,7 @@ public final class StreamAbleConfig {
         ui.validate();
         video.validate();
         runtime.validate();
+        microphone.validate();
         schemaVersion = CURRENT_SCHEMA_VERSION;
     }
 

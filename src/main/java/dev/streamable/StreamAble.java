@@ -34,6 +34,10 @@ public final class StreamAble implements ClientModInitializer {
     private static KeyMapping openStudioKey;
     private static KeyMapping toggleSourceEditorKey;
     private static KeyMapping toggleHudKey;
+    private static KeyMapping toggleMicMuteKey;
+    private static KeyMapping pushToTalkKey;
+    private static KeyMapping pushToMuteKey;
+    private static KeyMapping toggleNoiseBypassKey;
 
     private StreamAbleClient runtime;
 
@@ -72,6 +76,31 @@ public final class StreamAble implements ClientModInitializer {
         openStudioKey = register("open_studio", GLFW.GLFW_KEY_F6);
         toggleSourceEditorKey = register("toggle_source_editor", GLFW.GLFW_KEY_F7);
         toggleHudKey = register("toggle_overlays", GLFW.GLFW_KEY_F8);
+        // Microphone controls start unbound: every obvious key is already a
+        // game control for someone, so the player chooses.
+        toggleMicMuteKey = register("toggle_mic_mute", GLFW.GLFW_KEY_UNKNOWN);
+        pushToTalkKey = register("push_to_talk", GLFW.GLFW_KEY_UNKNOWN);
+        pushToMuteKey = register("push_to_mute", GLFW.GLFW_KEY_UNKNOWN);
+        toggleNoiseBypassKey = register("toggle_noise_bypass", GLFW.GLFW_KEY_UNKNOWN);
+    }
+
+    /**
+     * Whether a hold-type key is physically down. Polled from the key state
+     * rather than from KeyMapping click events, so holding push-to-talk works
+     * reliably even while a screen is open, and a release is never missed.
+     */
+    private static boolean held(Minecraft client, KeyMapping mapping) {
+        InputConstants.Key key = KeyMappingHelper.getBoundKeyOf(mapping);
+        if (key == null || key.equals(InputConstants.UNKNOWN) || client.getWindow() == null) {
+            return false;
+        }
+        if (key.getType() == InputConstants.Type.KEYSYM) {
+            return InputConstants.isKeyDown(client.getWindow(), key.getValue());
+        }
+        if (key.getType() == InputConstants.Type.MOUSE) {
+            return GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
+        }
+        return mapping.isDown();
     }
 
     private static KeyMapping register(String name, int defaultKey) {
@@ -114,6 +143,18 @@ public final class StreamAble implements ClientModInitializer {
             runtime.config().ui.showStreamHud = !runtime.config().ui.showStreamHud;
             runtime.markDirty();
         }
+        var mic = runtime.config().microphone;
+        while (toggleMicMuteKey.consumeClick()) {
+            mic.muted = !mic.muted;
+            mic.touch();
+            runtime.markDirty();
+        }
+        while (toggleNoiseBypassKey.consumeClick()) {
+            mic.noise.bypass = !mic.noise.bypass;
+            mic.touch();
+        }
+        runtime.microphone().processor().setPushToTalkHeld(held(client, pushToTalkKey));
+        runtime.microphone().processor().setPushToMuteHeld(mic.pushToMute && held(client, pushToMuteKey));
         runtime.onClientTick();
     }
 }

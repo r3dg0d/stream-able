@@ -612,7 +612,7 @@ public final class StudioScreen extends Screen {
 
         // ---- microphone device selection ----------------------------------
         List<dev.streamable.audio.JavaAudioCapture.AudioDeviceInfo> devices =
-                dev.streamable.audio.MicrophoneCapture.availableDevices();
+                runtime.microphone().devices().devices();
         String current = recording.microphoneDevice;
         String label = current.isBlank() ? "System default" : current;
         if (label.length() > 42) {
@@ -649,11 +649,11 @@ public final class StudioScreen extends Screen {
 
         addRenderableWidget(Button.builder(Component.literal("Test / restart microphone"), b -> {
             runtime.restartMicrophone();
-            setStatus(runtime.microphone().status(), !runtime.microphone().isRunning());
+            setStatus(runtime.microphone().status(), !runtime.microphone().isCapturing());
             rebuildWidgets();
         }).bounds(x, y, 200, 20).build());
         addRenderableWidget(Button.builder(Component.literal("Rescan devices"), b -> {
-            setStatus(dev.streamable.audio.MicrophoneCapture.availableDevices().size()
+            setStatus(runtime.microphone().devices().devices().size()
                     + " input device(s) found.", false);
             rebuildWidgets();
         }).bounds(x + 206, y, 130, 20).build());
@@ -663,8 +663,8 @@ public final class StudioScreen extends Screen {
         int x = contentX();
         var mic = runtime.microphone();
         graphics.text(font, "Microphone: " + mic.status(), x, height - 68,
-                mic.isRunning() ? 0xFF81C784 : 0xFFFFB74D);
-        if (!mic.isRunning() && runtime.config().recording.captureMicrophone) {
+                mic.isCapturing() ? 0xFF81C784 : 0xFFFFB74D);
+        if (!mic.isCapturing() && runtime.config().recording.captureMicrophone) {
             graphics.text(font,
                     "Capture starts with the recording or stream; use Test to check it now.",
                     x, height - 56, 0xFF90A4AE);

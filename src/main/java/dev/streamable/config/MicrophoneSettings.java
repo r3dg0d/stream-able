@@ -44,6 +44,15 @@ public final class MicrophoneSettings {
         }
     }
 
+    /** Which channel(s) of a stereo capture device carry the microphone. */
+    public enum InputChannel {
+        /** Mix both, unless one channel is silent (a mono mic on input 1 of an interface). */
+        AUTO,
+        MIX,
+        LEFT,
+        RIGHT
+    }
+
     /** Where the EQ sits relative to the compressor - the one reordering that is always safe. */
     public enum EqPlacement { BEFORE_COMPRESSOR, AFTER_COMPRESSOR }
 
@@ -166,6 +175,9 @@ public final class MicrophoneSettings {
     // ---- source & gain -------------------------------------------------------
 
     public Source source = Source.SYSTEM;
+    /** Capture device name; blank means the system default. */
+    public String device = "";
+    public InputChannel inputChannel = InputChannel.AUTO;
     /** Run Stream-able's chain on the Plasmo Voice signal too. */
     public boolean processPlasmoVoice = false;
     /** Digital gain applied first, in dB. Calibration sets this. */
@@ -197,6 +209,8 @@ public final class MicrophoneSettings {
     public boolean muted = false;
     /** When true the microphone only reaches the mix while the push-to-talk key is held. */
     public boolean pushToTalk = false;
+    /** When true, holding the push-to-mute key silences the microphone. */
+    public boolean pushToMute = false;
     /** Release delay after the push-to-talk key, so the last word is not cut. */
     public double pushToTalkReleaseMs = 250;
 
@@ -212,6 +226,12 @@ public final class MicrophoneSettings {
     public void validate() {
         if (source == null) {
             source = Source.SYSTEM;
+        }
+        if (device == null) {
+            device = "";
+        }
+        if (inputChannel == null) {
+            inputChannel = InputChannel.AUTO;
         }
         if (eqPlacement == null) {
             eqPlacement = EqPlacement.BEFORE_COMPRESSOR;

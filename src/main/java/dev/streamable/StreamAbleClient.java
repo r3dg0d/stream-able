@@ -70,8 +70,7 @@ public final class StreamAbleClient {
     private final VideoPipeline video = new VideoPipeline(compositor);
     private final SourceEditor editor;
     private final AudioMixer audioMixer = new AudioMixer();
-    private final dev.streamable.audio.MicrophoneCapture microphone =
-            new dev.streamable.audio.MicrophoneCapture(audioMixer);
+    private final dev.streamable.audio.mic.MicrophoneService microphone;
     private final RuntimeManager runtimes;
     private final FFmpegRuntime ffmpegRuntime;
     private final dev.streamable.browser.BrowserRuntime browserRuntime;
@@ -102,6 +101,7 @@ public final class StreamAbleClient {
         FFmpegManager.initShared(ffmpeg);
         this.encoderProbe = new FFmpegCapabilityProbe(ffmpeg);
 
+        this.microphone = new dev.streamable.audio.mic.MicrophoneService(audioMixer, config.microphone, runtimes);
         this.recording = new RecordingController(ffmpeg, encoderProbe, gameDirectory, audioMixer);
         this.streaming = new StreamController(ffmpeg, encoderProbe);
         this.streaming.setDestinations(loadDestinations());
@@ -164,7 +164,7 @@ public final class StreamAbleClient {
         return audioMixer;
     }
 
-    public dev.streamable.audio.MicrophoneCapture microphone() {
+    public dev.streamable.audio.mic.MicrophoneService microphone() {
         return microphone;
     }
 
@@ -232,32 +232,31 @@ public final class StreamAbleClient {
     // ---- microphone ----------------------------------------------------------
 
     /**
-     * Starts or stops microphone capture to match the current settings.
+     * Brings microphone capture in line with the outputs and settings.
      *
-     * <p>Plasmo Voice's microphone feed is disabled whenever our own capture is
-     * running: both write to the same bus, so leaving both on would mix the
-     * microphone into the program twice.</p>
+     * <p>With the system microphone selected, Plasmo Voice's microphone feed
+     * is not captured - both would land on the same bus and the voice would be
+     * mixed in twice. With the Plasmo Voice source selected, its processed
+     * microphone is routed through Stream-able's chain instead.</p>
      */
     public void applyMicrophoneSettings() {
-        boolean wanted = config.recording.captureMicrophone
-                && (recording.isActive() || streaming.isLive());
-        if (wanted && !microphone.isRunning()) {
-            microphone.start(config.recording.microphoneDevice, config.recording.microphoneGainPercent);
-        } else if (!wanted && microphone.isRunning()) {
-            microphone.stop();
-        } else if (microphone.isRunning()) {
-            microphone.setGainPercent(config.recording.microphoneGainPercent);
+        microphone.setEnabled(config.recording.captureMicrophone);
+        if (recording.isActive()) {
+            microphone.acquire(dev.streamable.audio.mic.MicrophoneService.User.RECORDING);
+        } else {
+            microphone.release(dev.streamable.audio.mic.MicrophoneService.User.RECORDING);
+        }
+        if (streaming.isLive()) {
+            microphone.acquire(dev.streamable.audio.mic.MicrophoneService.User.STREAMING);
+        } else {
+            microphone.release(dev.streamable.audio.mic.MicrophoneService.User.STREAMING);
         }
         applyVoiceChatSettings();
     }
 
     /** Restarts capture so a device change takes effect immediately. */
     public void restartMicrophone() {
-        boolean wasRunning = microphone.isRunning();
-        microphone.stop();
-        if ((wasRunning || recording.isActive() || streaming.isLive()) && config.recording.captureMicrophone) {
-            microphone.start(config.recording.microphoneDevice, config.recording.microphoneGainPercent);
-        }
+        microphone.restartInput();
     }
 
     // ---- lifecycle ---------------------------------------------------------
@@ -324,9 +323,10 @@ public final class StreamAbleClient {
 
     /** Keeps the voice integration in step with the audio settings. */
     public void applyVoiceChatSettings() {
-        // Only let Plasmo Voice supply the microphone when we are not capturing
-        // it ourselves, otherwise the same voice lands in the mix twice.
-        boolean voiceSuppliesMicrophone = config.recording.captureMicrophone && !microphone.isRunning();
+        // Plasmo Voice supplies the microphone only when it is the selected
+        // source; otherwise the same voice would land in the mix twice.
+        boolean voiceSuppliesMicrophone = config.recording.captureMicrophone
+                && config.microphone.source == dev.streamable.config.MicrophoneSettings.Source.PLASMO_VOICE;
         dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.configure(
                 config.recording.captureVoiceChat, voiceSuppliesMicrophone);
     }
@@ -636,7 +636,7 @@ public final class StreamAbleClient {
             if (streaming.isLive()) {
                 stopStreaming();
             }
-            microphone.stop();
+            microphone.close();
             detachMixerIfIdle();
             saveNow();
         } catch (RuntimeException e) {

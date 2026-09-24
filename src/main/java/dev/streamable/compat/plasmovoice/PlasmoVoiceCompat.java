@@ -148,7 +148,11 @@ public final class PlasmoVoiceCompat implements AddonInitializer {
             if (samples == null || samples.length == 0) {
                 return;
             }
-            submit(AudioBus.Kind.MICROPHONE, samples, 2, inputSampleRate(event));
+            // Through Stream-able's microphone chain when it is handling this
+            // source; directly to the bus otherwise.
+            if (!dev.streamable.audio.MicrophoneRouting.route(samples, 2, inputSampleRate(event))) {
+                submit(AudioBus.Kind.MICROPHONE, samples, 2, inputSampleRate(event));
+            }
         } catch (RuntimeException e) {
             StreamAbleLog.AUDIO.debug("Could not capture microphone audio: {}", e.toString());
         }

@@ -44,6 +44,7 @@ public final class MicrophoneChain {
     private final Set<String> bypassed = Collections.synchronizedSet(new HashSet<>());
     private List<AudioStage> order = List.of();
     private boolean processingEnabled = true;
+    private volatile boolean forcedBypass;
     private int configuredRevision = Integer.MIN_VALUE;
 
     /**
@@ -90,7 +91,7 @@ public final class MicrophoneChain {
     /** Processes one block in place. */
     public void process(float[] samples, int offset, int length) {
         inputMeter.process(samples, offset, length);
-        if (processingEnabled) {
+        if (processingEnabled && !forcedBypass) {
             for (AudioStage stage : order) {
                 if (stage.isEnabled() && !bypassed.contains(stage.id())) {
                     stage.process(samples, offset, length);
@@ -98,6 +99,15 @@ public final class MicrophoneChain {
             }
         }
         outputMeter.process(samples, offset, length);
+    }
+
+    /**
+     * Passes audio through untouched regardless of settings - used for a source
+     * that was already processed elsewhere (Plasmo Voice) unless the user asked
+     * for additional processing.
+     */
+    public void setForcedBypass(boolean bypass) {
+        forcedBypass = bypass;
     }
 
     /** Bypasses one stage for A/B listening; does not change saved settings. */
@@ -115,7 +125,7 @@ public final class MicrophoneChain {
 
     /** Total algorithmic latency of the enabled stages, in samples. */
     public int latencySamples() {
-        if (!processingEnabled) {
+        if (!processingEnabled || forcedBypass) {
             return 0;
         }
         int total = 0;

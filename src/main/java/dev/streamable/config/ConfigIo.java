@@ -112,6 +112,7 @@ public final class ConfigIo {
         }
         if (config.schemaVersion < 2) {
             migrateToIndependentOutputs(config);
+            migrateMicrophone(config);
             config.schemaVersion = 2;
         }
         if (config.schemaVersion > StreamAbleConfig.CURRENT_SCHEMA_VERSION) {
@@ -153,6 +154,28 @@ public final class ConfigIo {
         config.video = video;
         StreamAbleLog.CORE.info("Migrated video settings to schema 2: canvas {}x{}, recording {}, streaming {}.",
                 video.canvasWidth, video.canvasHeight, describe(video.recording), describe(video.streaming));
+    }
+
+    /**
+     * Schema 1 kept the microphone in the recording settings: a 0-400 % gain,
+     * a device name, and two toggles that were never wired to anything
+     * ("noise suppression", "push-to-talk"). They map onto the new chain; a
+     * player who had asked for noise suppression gets real AI noise
+     * cancellation at the Balanced level.
+     */
+    static void migrateMicrophone(StreamAbleConfig config) {
+        MicrophoneSettings mic = config.microphone == null ? new MicrophoneSettings() : config.microphone;
+        RecordingSettings recording = config.recording;
+        if (recording != null) {
+            int percent = Math.clamp(recording.microphoneGainPercent, 0, 400);
+            mic.inputGainDb = percent <= 0 ? -24 : Math.round(20 * Math.log10(percent / 100.0) * 2) / 2.0;
+            mic.device = recording.microphoneDevice == null ? "" : recording.microphoneDevice;
+            if (recording.noiseSuppression) {
+                mic.noise.level = MicrophoneSettings.NoiseLevel.BALANCED;
+            }
+            mic.pushToTalk = recording.pushToTalk;
+        }
+        config.microphone = mic;
     }
 
     private static VideoSettings.Output outputFrom(int width, int height, InterfaceSettings ui) {

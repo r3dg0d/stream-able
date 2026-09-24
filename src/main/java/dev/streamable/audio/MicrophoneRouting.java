@@ -1,0 +1,29 @@
+package dev.streamable.audio;
+
+/**
+ * Hand-off point for microphone audio captured by an optional integration
+ * (Plasmo Voice), so it can pass through the one canonical microphone chain
+ * instead of going straight to the mixer.
+ */
+public final class MicrophoneRouting {
+
+    /** Accepts interleaved 16-bit PCM; returns {@code true} when it took the audio. */
+    @FunctionalInterface
+    public interface Sink {
+        boolean accept(short[] samples, int channels, int sampleRate);
+    }
+
+    private static volatile Sink sink;
+
+    private MicrophoneRouting() {
+    }
+
+    public static void setSink(Sink value) {
+        sink = value;
+    }
+
+    public static boolean route(short[] samples, int channels, int sampleRate) {
+        Sink current = sink;
+        return current != null && current.accept(samples, channels, sampleRate);
+    }
+}

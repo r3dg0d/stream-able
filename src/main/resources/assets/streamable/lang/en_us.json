@@ -1,19 +1,16 @@
 {
   "screen.streamable.studio": "Stream-able Studio",
   "screen.streamable.source_editor": "Source Editor",
-
   "key.streamable.toggle_recording": "Start/Stop Recording",
   "key.streamable.toggle_streaming": "Start/Stop Streaming",
   "key.streamable.open_studio": "Open Stream-able Studio",
   "key.streamable.toggle_source_editor": "Toggle Source Edit Mode",
   "key.streamable.toggle_overlays": "Hide/Show Stream Overlays",
   "key.streamable.main": "Stream-able",
-
   "streamable.editor.mode": "Mode: %s",
   "streamable.editor.open_studio": "Studio",
   "streamable.editor.hint.transform": "Drag to move | red handle = resize | Shift+handle = free stretch | knob = rotate",
   "streamable.editor.hint.interact": "Interacting with the page - press Esc to return to Transform",
-
   "streamable.studio.home": "Home",
   "streamable.studio.recording": "Recording",
   "streamable.studio.streaming": "Streaming",
@@ -22,10 +19,12 @@
   "streamable.studio.audio": "Audio",
   "streamable.studio.advanced": "Advanced",
   "streamable.studio.about": "About",
-
   "streamable.browser.unavailable": "Browser Sources unavailable",
   "streamable.browser.unavailable.detail": "MCEF initialization failed. Recording and streaming remain available.",
-
   "streamable.error.no_destination": "No streaming destination is enabled.",
-  "streamable.error.no_ffmpeg": "FFmpeg is not available. Install it from the Stream-able settings first."
+  "streamable.error.no_ffmpeg": "FFmpeg is not available. Install it from the Stream-able settings first.",
+  "key.streamable.toggle_mic_mute": "Mute / Unmute Microphone",
+  "key.streamable.push_to_talk": "Push to Talk (hold)",
+  "key.streamable.push_to_mute": "Push to Mute (hold)",
+  "key.streamable.toggle_noise_bypass": "Bypass AI Noise Cancellation"
 }

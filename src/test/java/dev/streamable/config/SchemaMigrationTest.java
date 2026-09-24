@@ -74,4 +74,21 @@ class SchemaMigrationTest {
         assertEquals(new Resolution(3441, 1441), output.resolve(new Resolution(1920, 1080)),
                 "user-entered sizes are never changed; validation reports them");
     }
+
+    @Test
+    void oldMicrophoneFieldsMigrateIntoTheChain() throws Exception {
+        String v1 = """
+                {"schemaVersion": 1,
+                 "recording": {"microphoneGainPercent": 200, "microphoneDevice": "USB Mic",
+                               "noiseSuppression": true, "pushToTalk": true},
+                 "ui": {"canvasWidth": 1920, "canvasHeight": 1080}}
+                """;
+        Files.writeString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), v1, StandardCharsets.UTF_8);
+        StreamAbleConfig config = ConfigIo.load(dir);
+        assertEquals(6.0, config.microphone.inputGainDb, 0.01, "200 % is +6 dB");
+        assertEquals("USB Mic", config.microphone.device);
+        assertEquals(dev.streamable.config.MicrophoneSettings.NoiseLevel.BALANCED, config.microphone.noise.level);
+        assertTrue(config.microphone.pushToTalk);
+        assertFalse(config.microphone.monitoring, "monitoring always starts off");
+    }
 }
