@@ -145,8 +145,11 @@ public final class Painter {
     }
 
     public String ellipsize(String text, int maxWidth, float scale, Weight weight) {
-        if (text == null || textWidth(text, scale, weight) <= maxWidth) {
+        if (text == null || text.isEmpty() || textWidth(text, scale, weight) <= maxWidth) {
             return text;
+        }
+        if (maxWidth <= 0) {
+            return "";
         }
         String ellipsis = "…";
         int end = text.length();
