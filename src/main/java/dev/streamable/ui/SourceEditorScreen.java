@@ -28,15 +28,20 @@ import org.lwjgl.glfw.GLFW;
  * render pass, not here: it has to line up with the browser textures, which are
  * composited in the same pass and the same coordinate space.</p>
  */
-public final class SourceEditorScreen extends Screen {
+public final class SourceEditorScreen extends Screen implements StreamAbleScreen {
 
     private final StreamAbleClient runtime;
     private EditorMode mode = EditorMode.TRANSFORM;
     private boolean dragging;
 
+    private boolean draggingHud;
+    private double hudGrabX;
+    private double hudGrabY;
+
     public SourceEditorScreen(StreamAbleClient runtime) {
         super(Component.translatable("screen.streamable.source_editor"));
         this.runtime = runtime;
+        runtime.freezeGameForStudio(net.minecraft.client.Minecraft.getInstance().screen);
     }
 
     @Override
@@ -46,7 +51,7 @@ public final class SourceEditorScreen extends Screen {
                 .bounds(8, 8, 130, 20).build());
         addRenderableWidget(net.minecraft.client.gui.components.Button
                 .builder(Component.translatable("streamable.editor.open_studio"),
-                        b -> minecraft.setScreen(new StudioScreen(runtime, this)))
+                        b -> minecraft.setScreen(new dev.streamable.ui.studio.StudioScreen(runtime, this)))
                 .bounds(146, 8, 110, 20).build());
     }
 
@@ -118,6 +123,15 @@ public final class SourceEditorScreen extends Screen {
             }
             return false;
         }
+        int[] hud = StreamHud.bounds();
+        if (event.button() == 0 && hud[2] > 0 && event.x() >= hud[0] && event.x() < hud[0] + hud[2]
+                && event.y() >= hud[1] && event.y() < hud[1] + hud[3]) {
+            // The stream HUD sits above the canvas: dragging it moves the HUD, not a source.
+            draggingHud = true;
+            hudGrabX = event.x() - hud[0];
+            hudGrabY = event.y() - hud[1];
+            return true;
+        }
         boolean shift = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
         dragging = runtime.editor().onMousePress(toCanvas(event.x(), event.y()), shift);
         return dragging;
@@ -136,6 +150,11 @@ public final class SourceEditorScreen extends Screen {
                 }
             }
             return false;
+        }
+        if (draggingHud) {
+            StreamHud.moveTo(runtime.config().ui, (int) Math.round(event.x() - hudGrabX),
+                    (int) Math.round(event.y() - hudGrabY), width, height);
+            return true;
         }
         if (dragging) {
             boolean shift = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
@@ -157,6 +176,10 @@ public final class SourceEditorScreen extends Screen {
                     return true;
                 }
             }
+        } else if (draggingHud) {
+            draggingHud = false;
+            runtime.markDirty();
+            return true;
         } else if (dragging) {
             dragging = false;
             runtime.editor().onMouseRelease();

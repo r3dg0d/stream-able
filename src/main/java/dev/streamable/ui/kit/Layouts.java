@@ -146,4 +146,155 @@ public final class Layouts {
     public static Custom spacer(int height) {
         return new Custom(height, n -> { });
     }
+
+    /**
+     * A row when there is room, a column when there is not. Children share the
+     * width by weight in row mode; below {@code breakpoint} they stack at full width.
+     */
+    public static class Adaptive extends UiNode {
+        private final int breakpoint;
+        private final int gap;
+        private final java.util.List<Integer> weights = new java.util.ArrayList<>();
+
+        public Adaptive(int breakpoint, int gap) {
+            this.breakpoint = breakpoint;
+            this.gap = gap;
+        }
+
+        public <T extends UiNode> T add(T child, int weight) {
+            weights.add(Math.max(1, weight));
+            return super.add(child);
+        }
+
+        @Override
+        public <T extends UiNode> T add(T child) {
+            return add(child, 1);
+        }
+
+        private boolean horizontal(int w) {
+            return w >= breakpoint;
+        }
+
+        private int[] widths(int total) {
+            int shares = 0;
+            int count = 0;
+            for (int i = 0; i < children.size(); i++) {
+                if (children.get(i).isVisible()) {
+                    shares += weights.get(i);
+                    count++;
+                }
+            }
+            int free = Math.max(0, total - gap * Math.max(0, count - 1));
+            int[] out = new int[children.size()];
+            for (int i = 0; i < children.size(); i++) {
+                out[i] = shares == 0 ? 0 : free * weights.get(i) / shares;
+            }
+            return out;
+        }
+
+        @Override
+        protected void layout() {
+            if (horizontal(width)) {
+                int[] w = widths(width);
+                int cx = x;
+                for (int i = 0; i < children.size(); i++) {
+                    UiNode child = children.get(i);
+                    if (!child.isVisible()) {
+                        continue;
+                    }
+                    child.setBounds(cx, y, w[i], child.preferredHeight(w[i]));
+                    cx += w[i] + gap;
+                }
+            } else {
+                int cy = y;
+                for (UiNode child : children) {
+                    if (!child.isVisible()) {
+                        continue;
+                    }
+                    int h = child.preferredHeight(width);
+                    child.setBounds(x, cy, width, h);
+                    cy += h + gap;
+                }
+            }
+        }
+
+        @Override
+        public int preferredHeight(int availableWidth) {
+            if (horizontal(availableWidth)) {
+                int[] w = widths(availableWidth);
+                int h = 0;
+                for (int i = 0; i < children.size(); i++) {
+                    if (children.get(i).isVisible()) {
+                        h = Math.max(h, children.get(i).preferredHeight(w[i]));
+                    }
+                }
+                return h;
+            }
+            int total = 0;
+            int count = 0;
+            for (UiNode child : children) {
+                if (child.isVisible()) {
+                    total += child.preferredHeight(availableWidth);
+                    count++;
+                }
+            }
+            return total + Math.max(0, count - 1) * gap;
+        }
+    }
+
+    /** Equal-width cells that wrap onto new lines: metric cards, preset chips. */
+    public static class Grid extends UiNode {
+        private final int minCellWidth;
+        private final int gap;
+
+        public Grid(int minCellWidth, int gap) {
+            this.minCellWidth = minCellWidth;
+            this.gap = gap;
+        }
+
+        private int columns(int w) {
+            return Math.max(1, (w + gap) / (minCellWidth + gap));
+        }
+
+        private java.util.List<UiNode> shown() {
+            return children.stream().filter(UiNode::isVisible).toList();
+        }
+
+        @Override
+        protected void layout() {
+            java.util.List<UiNode> cells = shown();
+            int cols = Math.min(columns(width), Math.max(1, cells.size()));
+            int cellW = (width - gap * (cols - 1)) / cols;
+            int cy = y;
+            for (int start = 0; start < cells.size(); start += cols) {
+                int rowH = 0;
+                for (int i = start; i < Math.min(cells.size(), start + cols); i++) {
+                    rowH = Math.max(rowH, cells.get(i).preferredHeight(cellW));
+                }
+                for (int i = start; i < Math.min(cells.size(), start + cols); i++) {
+                    cells.get(i).setBounds(x + (i - start) * (cellW + gap), cy, cellW, rowH);
+                }
+                cy += rowH + gap;
+            }
+        }
+
+        @Override
+        public int preferredHeight(int availableWidth) {
+            java.util.List<UiNode> cells = shown();
+            if (cells.isEmpty()) {
+                return 0;
+            }
+            int cols = Math.min(columns(availableWidth), cells.size());
+            int cellW = (availableWidth - gap * (cols - 1)) / cols;
+            int total = 0;
+            for (int start = 0; start < cells.size(); start += cols) {
+                int rowH = 0;
+                for (int i = start; i < Math.min(cells.size(), start + cols); i++) {
+                    rowH = Math.max(rowH, cells.get(i).preferredHeight(cellW));
+                }
+                total += rowH + gap;
+            }
+            return total - gap;
+        }
+    }
 }

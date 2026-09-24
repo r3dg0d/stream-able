@@ -27,6 +27,16 @@ public final class ScrollView extends UiNode {
         scroll = Math.clamp(scroll, 0, max);
     }
 
+    public double scrollOffset() {
+        return target;
+    }
+
+    /** Restores a scroll position (clamped once the content is laid out). */
+    public void setScrollOffset(double offset) {
+        target = Math.max(0, offset);
+        scroll = target;
+    }
+
     /** Scrolls so a node is visible (keyboard focus moving off-screen). */
     public void reveal(UiNode node) {
         int top = node.y - content.y;

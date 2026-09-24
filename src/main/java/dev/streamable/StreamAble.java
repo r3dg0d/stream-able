@@ -1,8 +1,8 @@
 package dev.streamable;
 
 import dev.streamable.ui.SourceEditorScreen;
-import dev.streamable.ui.StreamHealthHud;
-import dev.streamable.ui.StudioScreen;
+import dev.streamable.ui.StreamHud;
+import dev.streamable.ui.studio.StudioScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -48,7 +48,7 @@ public final class StreamAble implements ClientModInitializer {
 
         registerKeyBindings();
         HudElementRegistry.addLast(
-                Identifier.fromNamespaceAndPath(MOD_ID, "stream_health"), new StreamHealthHud());
+                Identifier.fromNamespaceAndPath(MOD_ID, "stream_health"), new StreamHud());
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
@@ -101,6 +101,13 @@ public final class StreamAble implements ClientModInitializer {
             return GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
         }
         return mapping.isDown();
+    }
+
+    /** Every Stream-able key mapping, in display order, for the Studio's shortcut list. */
+    public static java.util.List<KeyMapping> keyMappings() {
+        return java.util.stream.Stream.of(openStudioKey, toggleSourceEditorKey, toggleHudKey, toggleRecordingKey,
+                toggleStreamingKey, toggleMicMuteKey, pushToTalkKey, pushToMuteKey, toggleNoiseBypassKey)
+                .filter(java.util.Objects::nonNull).toList();
     }
 
     private static KeyMapping register(String name, int defaultKey) {

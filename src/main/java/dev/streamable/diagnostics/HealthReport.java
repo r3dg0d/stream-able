@@ -212,6 +212,17 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
         return value < 0 ? "-" : String.format(Locale.ROOT, "%,.0f kbps", value);
     }
 
+    /** The most severe finding, or {@link Severity#OK}. */
+    public Severity worst() {
+        Severity worst = Severity.OK;
+        for (Finding finding : findings) {
+            if (finding.severity().ordinal() > worst.ordinal()) {
+                worst = finding.severity();
+            }
+        }
+        return worst;
+    }
+
     public static String duration(long millis) {
         long seconds = Math.max(0, millis) / 1000;
         return String.format(Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60);

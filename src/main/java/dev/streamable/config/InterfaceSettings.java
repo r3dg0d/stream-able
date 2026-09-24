@@ -10,6 +10,9 @@ public final class InterfaceSettings {
     public int streamHudPosition = 1;
     public float streamHudScale = 1.0f;
     public float streamHudOpacity = 0.85f;
+    /** HUD position as a fraction of the free screen area; negative means the default top-right corner. */
+    public float streamHudX = -1;
+    public float streamHudY = -1;
 
     /** Program canvas the source transforms are expressed in. */
     public int canvasWidth = 1920;
@@ -25,6 +28,12 @@ public final class InterfaceSettings {
         streamHudPosition = Math.clamp(streamHudPosition, 0, 3);
         streamHudScale = (float) Math.clamp(streamHudScale, 0.5, 3.0);
         streamHudOpacity = (float) Math.clamp(streamHudOpacity, 0.1, 1.0);
+        if (!Float.isFinite(streamHudX) || streamHudX > 1) {
+            streamHudX = -1;
+        }
+        if (!Float.isFinite(streamHudY) || streamHudY > 1) {
+            streamHudY = -1;
+        }
         canvasWidth = Math.clamp(canvasWidth - (canvasWidth % 2), 320, 16384);
         canvasHeight = Math.clamp(canvasHeight - (canvasHeight % 2), 240, 16384);
         snapThreshold = Math.clamp(snapThreshold, 0.0, 64.0);

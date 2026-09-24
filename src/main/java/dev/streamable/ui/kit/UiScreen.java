@@ -29,7 +29,6 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
     private long lastFrame = System.nanoTime();
     private UiNode tooltipNode;
     private long tooltipSince;
-    private boolean needsLayout = true;
     private String toast;
     private int toastColor;
     private long toastUntil;
@@ -46,18 +45,17 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         rebuild();
     }
 
-    /** Re-creates the whole tree (page change). Keeps focus if the node survives. */
+    /** Re-creates the whole tree (page change). */
     public void rebuild() {
+        focusNode(null);   // lets a field being edited commit first
         root.clear();
-        focused = null;
         popup = null;
         captured = null;
         build(root);
-        needsLayout = true;
     }
 
+    /** Layout already runs every frame; kept so components can state the intent explicitly. */
     public void relayout() {
-        needsLayout = true;
     }
 
     public UiNode focusedNode() {
@@ -93,11 +91,28 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         popup.parent = root;
         if (node instanceof Dropdown.ListPopup list) {
             list.place(width, height);
+        } else if (node instanceof Dialog) {
+            node.setBounds(0, 0, width, height);
+            List<UiNode> order = new ArrayList<>();
+            node.collectFocusable(order);
+            focusNode(order.stream().filter(n -> n instanceof TextField).findFirst().orElse(null));
         }
     }
 
     public void closePopup() {
+        if (popup instanceof Dialog && focused != null) {
+            for (UiNode n = focused; n != null; n = n.parent) {
+                if (n == popup) {
+                    focusNode(null);
+                    break;
+                }
+            }
+        }
         popup = null;
+    }
+
+    public boolean hasDialog() {
+        return popup instanceof Dialog;
     }
 
     public void toast(String message, int color) {
@@ -137,11 +152,13 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         long now = System.nanoTime();
         float delta = Math.min(0.1f, (now - lastFrame) / 1e9f);
         lastFrame = now;
-        if (needsLayout) {
-            needsLayout = false;
-            root.setBounds(0, 0, width, height);
-        }
+        // Layout is explicit and cheap, so it runs every frame: rows that
+        // appear or disappear with live state never leave stale gaps.
         onFrame();
+        root.setBounds(0, 0, width, height);
+        if (popup instanceof Dialog) {
+            popup.setBounds(0, 0, width, height);
+        }
         Painter painter = new Painter(graphics, mouseX, mouseY, delta);
         drawBackdrop(painter);
         root.render(painter);
@@ -162,7 +179,8 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
     }
 
     private void drawTooltip(Painter p, int mx, int my) {
-        UiNode over = popup != null && popup.contains(mx, my) ? null : root.hit(mx, my);
+        UiNode over = popup instanceof Dialog ? popup.hit(mx, my)
+                : popup != null && popup.contains(mx, my) ? null : root.hit(mx, my);
         while (over != null && over.tooltip() == null) {
             over = over.parent;
         }
@@ -211,16 +229,25 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         double mx = event.x();
         double my = event.y();
         if (popup != null) {
-            if (popup.contains(mx, my)) {
-                popup.mouseDown(mx, my, event.button());
+            if (popup instanceof Dialog || popup.contains(mx, my)) {
+                dispatchDown(popup, mx, my, event.button());
                 return true;
             }
             popup = null;
             return true;
         }
-        UiNode target = root.hit(mx, my);
-        for (UiNode node = target; node != null; node = node.parent) {
-            if (node.isEnabled() && node.mouseDown(mx, my, event.button())) {
+        if (dispatchDown(root, mx, my, event.button())) {
+            return true;
+        }
+        focusNode(null);
+        return super.mouseClicked(event, doubled);
+    }
+
+    /** Sends a press to the deepest node under the pointer, bubbling up to {@code scope}. */
+    private boolean dispatchDown(UiNode scope, double mx, double my, int button) {
+        UiNode target = scope.hit(mx, my);
+        for (UiNode node = target; node != null; node = node == scope ? null : node.parent) {
+            if (node.isEnabled() && node.mouseDown(mx, my, button)) {
                 captured = node;
                 if (node.isFocusable()) {
                     focusNode(node);
@@ -230,8 +257,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
                 return true;
             }
         }
-        focusNode(null);
-        return super.mouseClicked(event, doubled);
+        return false;
     }
 
     @Override
@@ -256,6 +282,9 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (popup instanceof Dialog) {
+            return true;
+        }
         if (popup != null && popup.contains(mouseX, mouseY)) {
             return popup.mouseScroll(mouseX, mouseY, scrollY);
         }
@@ -273,7 +302,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         int mods = event.modifiers();
         if (popup != null) {
             if (key == GLFW.GLFW_KEY_ESCAPE) {
-                popup = null;
+                closePopup();
                 return true;
             }
             if (popup.keyDown(key, mods)) {
@@ -327,7 +356,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
 
     private void moveFocus(int direction) {
         List<UiNode> order = new ArrayList<>();
-        root.collectFocusable(order);
+        (popup instanceof Dialog ? popup : root).collectFocusable(order);
         if (order.isEmpty()) {
             return;
         }
@@ -335,6 +364,12 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         int next = index < 0 ? (direction > 0 ? 0 : order.size() - 1)
                 : Math.floorMod(index + direction, order.size());
         focusNode(order.get(next));
+    }
+
+    @Override
+    public void removed() {
+        focusNode(null);
+        super.removed();
     }
 
     @Override

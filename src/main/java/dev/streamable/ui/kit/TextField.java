@@ -27,6 +27,7 @@ public final class TextField extends UiNode {
     private Predicate<String> accepts = s -> true;
     private int maxLength = 512;
     private long focusedAt;
+    private boolean commitOnBlur;
 
     public TextField(String label, Supplier<String> source, Consumer<String> sink) {
         this.label = label;
@@ -48,6 +49,21 @@ public final class TextField extends UiNode {
     public TextField numeric() {
         this.accepts = s -> s.matches("-?[0-9]*\\.?[0-9]*");
         return this;
+    }
+
+    /**
+     * Hands the value to the model only when editing ends (Enter or focus
+     * loss) instead of on every keystroke - for values that are expensive to
+     * apply, such as a browser source's URL.
+     */
+    public TextField commitOnBlur() {
+        this.commitOnBlur = true;
+        return this;
+    }
+
+    /** The text currently in the field. */
+    public String text() {
+        return text;
     }
 
     public TextField maxLength(int value) {
@@ -143,6 +159,9 @@ public final class TextField extends UiNode {
         focusedAt = System.currentTimeMillis();
         if (!focused) {
             anchor = cursor;
+            if (commitOnBlur && !text.equals(source.get())) {
+                sink.accept(text);
+            }
         }
     }
 
@@ -173,7 +192,9 @@ public final class TextField extends UiNode {
             return;
         }
         text = next;
-        sink.accept(text);
+        if (!commitOnBlur) {
+            sink.accept(text);
+        }
     }
 
     private void insert(String value) {
