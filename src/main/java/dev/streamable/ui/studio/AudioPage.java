@@ -647,8 +647,8 @@ final class AudioPage {
         grid.add(new Widgets.MetricCard("Processed", () -> Long.toString(processor.stats().processedBlocks()),
                 () -> Theme.TEXT, () -> processor.stats().underruns() + " underruns"));
         card.add(new Widgets.Notice(() -> processor.stats().overloaded()
-                ? "The chain is falling behind real time, so stages are being bypassed to keep audio flowing. "
-                + "Choose a lighter noise model or turn a stage off." : null, () -> Theme.WARNING));
+                ? "Processing is falling behind real time, so AI noise cancellation is being skipped until it "
+                + "catches up. Choose a lighter noise model or a lower strength." : null, () -> Theme.WARNING));
     }
 
     private static void controlsCard(Studio s, Widgets.Card card) {

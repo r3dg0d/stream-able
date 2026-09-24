@@ -94,6 +94,11 @@ public final class RecordingSettings {
     /** Manual A/V nudge in milliseconds, on top of the measured start offset. */
     public int audioDelayMs = 0;
 
+    // ---- carried over from Record-able, not implemented ----------------------
+    // Replay buffer, auto-clips, deferred capture and the overlay/watermark
+    // fields below are kept so configs and the Record-able import round-trip,
+    // but nothing reads them and the Studio does not show them.
+
     // ---- replay buffer and clips ------------------------------------------
     public boolean replayBufferEnabled = false;
     public int replayBufferSeconds = 60;

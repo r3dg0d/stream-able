@@ -118,12 +118,13 @@ final class AdvancedPage {
                 () -> "Recording and livestreaming inside Minecraft. MIT licence."));
         for (String line : List.of(
                 "Derived from Record-able by JoEusebe (MIT).",
-                "Browser sources: MCEF Modern (LGPL-2.1, bundled unmodified), JCEF and the Chromium Embedded "
-                        + "Framework (BSD-3-Clause); Chromium's own licences apply to the downloaded engine.",
+                "Browser sources: MCEF Modern (LGPL-2.1, bundled unmodified and replaceable), jcefmaven (Apache-2.0), "
+                        + "JCEF and the Chromium Embedded Framework (BSD-3-Clause); Chromium's own licences apply to "
+                        + "the downloaded engine.",
                 "FFmpeg: a GPL build by BtbN, downloaded on demand and run as a separate program; its source is "
                         + "available from the FFmpeg project and BtbN's build scripts.",
-                "Noise cancellation: ONNX Runtime (MIT); DPDFNet (Apache-2.0); DeepFilterNet2 (MIT or Apache-2.0); "
-                        + "GTCRN (MIT). Models are downloaded on demand and run locally.",
+                "Noise cancellation: ONNX Runtime (MIT); DPDFNet and its DeepFilterNet2-architecture baseline "
+                        + "checkpoint (Apache-2.0, Ceva); GTCRN (MIT). Models are downloaded on demand and run locally.",
                 "Interface font: Inter (SIL Open Font License 1.1). Archive decoding: XZ for Java (0BSD).",
                 "Full notices are in the NOTICE file shipped with the mod.")) {
             about.add(new Label(() -> line).color(Theme.TEXT_SECONDARY).scale(Theme.TEXT_CAPTION).wrap());

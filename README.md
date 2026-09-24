@@ -2,58 +2,75 @@
 
 **An OBS-like recording, livestreaming and multistreaming studio that runs inside Minecraft.**
 
-Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-able) by JoEusebe. It keeps the recorder and adds everything you need to actually go live: RTMP/RTMPS streaming, multistreaming to several services at once, and real interactive Chromium **browser sources** composited over gameplay — alerts, chat widgets, goals, custom HTML — without a second application on your machine.
+Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-able) by JoEusebe. It keeps the recorder and adds what you need to actually go live: RTMP/RTMPS streaming, multistreaming, interactive Chromium **browser sources** composited over gameplay, a professional microphone chain with local AI noise cancellation, and first-class ultrawide support - without a second application on your machine.
 
-The idea is simple: **Minecraft itself becomes the streaming studio.**
+**One jar.** Drop `stream-able-<version>.jar` into `mods/` next to Fabric API. The browser engine library (MCEF Modern) is bundled; FFmpeg, the Chromium engine and the optional noise-cancellation models are downloaded on demand, pinned by version and SHA-256, and verified before anything runs.
 
 ---
 
 ## What it does
 
+### The Studio (F6)
+- One screen for everything: sidebar pages, record / go-live controls that are always visible, and a status bar summarising FFmpeg, encoder, canvas and outputs, frame rate, microphone and network.
+- **Home**: live program preview at the canvas's true shape, safe-area guides, the region each output actually shows (for example the 16:9 crop of an ultrawide canvas), both outputs, destinations and a mixer.
+- **Sources, Video, Audio, Recording, Streaming, Destinations, Stream Health, Components, Advanced** pages.
+- Keyboard navigation: Tab / Shift+Tab, Enter or Space, Ctrl+1...0 for pages, Ctrl+R to record, Esc closes popups, then leaves text fields, then the Studio.
+- While a Stream-able screen is open, recordings and streams keep showing the last game frame, so viewers never see your settings or keys.
+
 ### Recording
-Everything Record-able did, preserved:
+- Local recording through FFmpeg with hardware encoding (NVIDIA NVENC, Intel Quick Sync, AMD AMF, VA-API) or software x264/x265/VP9/SVT-AV1. **Auto** picks the best encoder that passed a *real test encode* on your machine.
+- MP4, MKV, MOV and WebM, with container/codec combinations validated before recording starts.
+- Constant-quality, VBR or CBR; optional size limit; pause/resume.
+- Game audio, Plasmo Voice, and your processed microphone - optionally on its own track for editing.
+- A/V alignment by measured start offsets, and a timeline that never loses time: when the game renders slower than the output rate, frames are repeated and audio is padded, so a 60 FPS recording is 60 FPS in real time.
+- Files are tagged BT.709 with square pixels, so players display them correctly.
 
-- Local gameplay recording via FFmpeg, with automatic FFmpeg download and checksum verification
-- Hardware encoding — NVIDIA NVENC, AMD AMF, Intel Quick Sync, VA-API — with software x264 fallback
-- MP4, MKV, MOV and WebM containers
-- Configurable resolution, frame rate, bitrate and quality
-- Game audio via OpenAL loopback, plus microphone with gain, push-to-talk and noise suppression
-- Separate audio tracks, replay buffer, auto-clips, deferred capture and crash recovery
-- Microsecond-accurate A/V alignment: audio is muxed in afterwards with a *measured* start offset, which is what stops long recordings drifting
+### Ultrawide and custom resolutions
+- Independent **program canvas**, **recording output** and **streaming output** sizes. Presets for 16:9, 16:10, 21:9 and 32:9, "match game window", and exact custom sizes.
+- Per-output scaling: **Native, Fit, Fill, Center Crop, Stretch** - never stretched silently. The Video page describes exactly what each output shows, and warns about distortion, odd sizes, encoder limits and services that may handle ultrawide differently.
+- Suggested 16:9 stream size for an ultrawide canvas; record at native 21:9 or 32:9 while streaming 16:9.
+- Scaling happens on the GPU before readback.
 
-### Streaming
-- RTMP and RTMPS to Twitch, YouTube, X, Kick, or any other endpoint
-- Protocol-based: if a service gives you a **Stream URL** and a **Stream Key**, Stream-able can publish to it. No platform API, no OAuth, nothing to break when a service changes its dashboard.
-- Automatic encoder detection that runs a **real test encode** rather than trusting `ffmpeg -encoders`
-- Reconnect with exponential backoff, bounded frame queues, and live health diagnostics
+### Streaming and multistreaming
+- RTMP and RTMPS to Twitch, YouTube, X, Kick or any endpoint. If a service gives you a Stream URL and a Stream Key, Stream-able can publish to it.
+- Destinations sharing an encode profile are served by **one encoder** fanned out with FFmpeg's `tee` muxer; a dead ingest cannot take the healthy ones down.
+- Reconnect with backoff, bounded queues and live health: delivered bitrate, encoder FPS and latency, dropped and repeated frames, network condition.
+- **Destination test**: for Twitch, a real `?bandwidthtest=true` publish that does not make your channel live. For other services, which offer no known private test mode, Stream-able checks DNS, TCP, TLS and the RTMP handshake, then runs your exact encoder settings locally - and says so plainly.
 
-### Multistreaming
-- Enable as many destinations as you like
-- Destinations sharing an encode profile are served by **one encoder** and fanned out with FFmpeg's `tee` muxer — three services cost one encode, not three
-- Each `tee` slave carries `onfail=ignore`, so a dead ingest cannot take the healthy ones down
-- A destination with its own profile transparently gets its own encoder, and you are warned about the extra CPU/GPU cost
-- Bandwidth estimator, because sharing an encoder does **not** share upstream: three 12 Mbps outputs still need ~36 Mbps
+### Microphone
+- A full processing chain, in order: input gain, high-pass, **AI noise cancellation**, gate/expander, EQ (with a live response graph and draggable bands), de-esser, compressor, automatic gain, limiter, output gain. The EQ can sit before or after the compressor.
+- **Simple mode** (preset, noise-cancellation strength, level, calibration, test) and **Advanced mode** (every stage, live gain-reduction meters, presets, diagnostics).
+- **Calibration** measures room noise and your speaking level and recommends input gain and a gate threshold; nothing changes until you apply it.
+- **Test recording with raw vs processed playback**, and optional live monitoring (off by default, never saved on).
+- Mute, push-to-talk, push-to-mute and AI-bypass hotkeys (unbound by default).
+- Mono microphones are centred; interfaces that put a mic on input 1 only are detected automatically.
+- Everything runs on the DSP worker thread in 10 ms blocks with a bounded queue; the mixer clock is never slowed by the microphone.
+
+### AI noise cancellation - local only
+No audio ever leaves your computer. Stream-able runs open models through ONNX Runtime, in-process and without Python:
+
+| Model | Rate | Measured on an Intel i9-14900K, one inference thread | Added latency |
+| --- | --- | --- | --- |
+| DPDFNet-2 | 48 kHz | 1.02 ms per 10 ms hop (RTF 0.12) | 40 ms model + 10 ms stage |
+| DeepFilterNet2-architecture (DPDFNet baseline) | 16 kHz | 0.30 ms per hop (RTF 0.04) | 40 ms |
+| GTCRN | 16 kHz | 0.39 ms per hop (RTF 0.03) | no model look-ahead |
+
+**Auto** tries them in that order, keeps the first that runs in real time on your machine, and demotes to a lighter model if the CPU falls behind. If none can load, the voice passes through untouched and the Audio page says why.
 
 ### Browser sources
-- Live Chromium pages rendered off-screen and composited over the game
-- Transparent backgrounds, so alert overlays sit on gameplay with no black box
-- Full interaction: clicking, scrolling, typing, clipboard shortcuts
-- OBS-style transform editor with a red bounding box, eight resize handles and a rotation knob
-- Per-source routing: visible on your screen, in the recording, on the stream — in any combination
+- Live Chromium pages rendered off-screen and composited over the game, with real transparency.
+- Full interaction in the canvas editor (F7): clicking, scrolling, typing, clipboard shortcuts.
+- Transform box with resize handles and a rotation knob, snapping, and numeric fields.
+- Per-source routing: your screen, the recording, the stream - in any combination.
+
+### Stream HUD
+A compact panel (LIVE / REC time, bitrate, encoder FPS, drops, network; detailed mode adds encoder, destinations and a mic meter). It is drawn **after** the frame is captured, so it is only ever on your screen. Drag it anywhere in the canvas editor; its position is remembered as a fraction of the screen. Toggle with F8.
 
 ---
 
 ## Recording *and* streaming, independently
 
-Recording and streaming are separate state machines that share only the composed frame:
-
-```
-Not recording + streaming
-Recording     + not streaming
-Recording     + streaming
-```
-
-Stopping a recording never touches a running broadcast, and a stream failure never corrupts the file on disk. They run as separate FFmpeg processes on purpose — modest duplication is worth more than a clever shared encoder that can ruin a recording.
+Recording and streaming are separate state machines that share only the composed frame. Stopping a recording never touches a running broadcast, and a stream failure never corrupts the file on disk. They run as separate FFmpeg processes on purpose.
 
 ---
 
@@ -61,22 +78,12 @@ Stopping a recording never touches a running broadcast, and a stream failure nev
 
 Getting a web overlay to composite correctly takes four things, and CSS is only one of them:
 
-1. **The browser is created transparent.** Stream-able passes `transparent = true` to MCEF, so CEF produces a BGRA buffer with a real alpha channel instead of an opaque page.
-2. **CSS is injected on every page load**, in two blocks: a forced-transparency base with `!important`, then your own CSS on top. Re-applying on every load matters — a redirect or a widget's own reload would otherwise leave the overlay opaque.
-3. **The pixel path preserves alpha** — CEF buffer → `GL_BGRA` upload → RGBA8 texture → compositor shader → program framebuffer, with no stage flattening it onto black.
-4. **Blending is premultiplied.** Chromium hands out premultiplied alpha, so the compositor blends with `(ONE, ONE_MINUS_SRC_ALPHA)` and scales all four channels by the source opacity. If overlay edges ever look haloed, flip **Advanced → Premultiplied browser alpha**.
+1. **The browser is created transparent.** Stream-able passes `transparent = true` to MCEF, so CEF produces a BGRA buffer with a real alpha channel.
+2. **CSS is injected on every page load**: a forced-transparency base, then your own CSS on top, so redirects and widget reloads stay transparent.
+3. **The pixel path preserves alpha** - CEF buffer, `GL_BGRA` upload, RGBA8 texture, compositor shader, program framebuffer.
+4. **Blending is premultiplied.** If overlay edges ever look haloed, flip **Advanced > Browser pages use premultiplied alpha**.
 
-The acceptance test is deliberately blunt: a red circle on an otherwise empty page must show Minecraft everywhere outside the circle. No black rectangle, no white rectangle. The bundled test page (**Advanced → Add browser test page**) includes exactly that.
-
-The transparency preset offered in the UI:
-
-```css
-body {
-    background-color: rgba(0, 0, 0, 0);
-    margin: 0px auto;
-    overflow: hidden;
-}
-```
+The acceptance test is blunt: a red circle on an otherwise empty page must show Minecraft everywhere outside the circle. The bundled test page (**Sources > Add test page**) includes exactly that.
 
 ---
 
@@ -84,115 +91,60 @@ body {
 
 Open with **F7**, or from the Studio.
 
-```
-              O   <- rotation knob
-              |
-     #--------#--------#
-     |                 |
-     |  Browser Source |
-     |                 |
-     #--------#--------#
-```
-
 | Action | Result |
 | --- | --- |
 | Drag inside the box | Move |
 | Drag a red handle | Resize, preserving aspect ratio |
 | **Shift** + drag a handle | Free / non-uniform stretch |
 | Drag the round knob | Rotate |
-| **Shift** while rotating | Snap to 15° |
-| Arrow keys | Nudge 1 px |
-| **Shift** + arrows | Nudge 10 px |
+| **Shift** while rotating | Snap to 15 degrees |
+| Arrow keys | Nudge 1 px (**Shift**: 10 px) |
 | **Delete** | Remove the selected source |
+| Drag the stream HUD | Move the HUD |
 | **Esc** | Leave Interact mode, then close the editor |
 
-Snapping to the canvas centre, canvas edges and other sources is on by default and can be turned off (**Advanced → Snap px = 0**).
-
-The numeric properties — `Width`, `Height`, `PosX`, `PosY`, `Rot` — are the *same values* the handles edit, so dragging and typing always agree.
-
-### Transform vs Interact
-
-| Mode | Mouse and keyboard go to |
-| --- | --- |
-| **Transform** | The editor: select, move, resize, rotate |
-| **Interact** | Chromium: clicks, scrolling, typing, clipboard |
-
-While no editor screen is open, browser sources receive **no input at all** — movement keys, attacks and item use behave exactly as they would without the mod.
+In **Interact** mode, mouse and keyboard go to Chromium instead. While no editor screen is open, browser sources receive no input at all.
 
 ---
 
 ## Streaming destinations
 
-Each destination has a name, platform, enabled flag, Stream URL, Stream Key and connection state (`Offline`, `Connecting`, `Live`, `Reconnecting`, `Error`).
+Each destination has a name, service, enabled flag, Server URL, Stream Key and connection state. Presets exist for Twitch, YouTube and X; every field is overridable. "Custom RTMP/RTMPS" accepts anything FFmpeg can write to.
 
-Presets exist for Twitch, YouTube and X, and every field is overridable — ingest hostnames change, and a preset should never be a cage. "Custom RTMP/RTMPS" accepts anything FFmpeg can write to.
+**Kick has no preset, deliberately.** Its Amazon IVS ingest host is per-account. Use **Custom RTMP/RTMPS** with the exact URL from your Kick dashboard.
 
-**Kick has no preset, deliberately.** Its Amazon IVS ingest host and path are per-account, so no default can be correct, and a preset you must overwrite before it works is worse than none. Use **Custom RTMP/RTMPS** with the exact URL from your Kick dashboard (`rtmps://<prefix>.global-contribute.live-video.net/`) and your stream key. Destinations saved under the old Kick preset keep working — they load as custom entries with their credentials intact.
-
-When a destination fails you can **Reconnect** it, **Disable** it, or **Copy diagnostic** (FFmpeg output with credentials stripped) without taking the rest of the broadcast offline.
-
-### Connected vs. merely started
-
-A destination only reports **Live** once FFmpeg confirms it is actually publishing — a spawned process proves nothing, since FFmpeg can start, fail the RTMP handshake and exit a second later.
-
-A stream that has *never* published is treated as a configuration problem rather than a dropped connection: it retries a few times and then reports what went wrong, instead of looping "Reconnecting…" forever. The usual causes are a stale stream key, a stream not enabled on the service's dashboard, or an ingest URL missing its application path — Stream-able rejects a host-only URL up front, because `rtmps://host/KEY` with no `/app` is the single most common paste mistake and FFmpeg only reports it as a bare `Input/output error`.
+A destination only reports **Live** once FFmpeg confirms it is publishing. A stream that has never published is treated as a configuration problem, not a dropped connection, and the Destinations page and Stream Health explain the likely cause.
 
 ---
 
 ## Security of stream keys
 
-A stream key is a credential: anyone holding it can broadcast to your channel.
+A stream key is a credential.
 
-- Never written to logs, toasts, crash reports or diagnostic exports
-- Never included in `toString()` — `StreamingCredentials` masks it structurally
-- Redacted centrally by `SecretRedactor`, which strips both keys it has been told about *and* anything that merely looks like one in FFmpeg output
-- Entered in a password-style field with reveal, paste and clear
-- On Linux and macOS the config file is `chmod 600` whenever it contains a key
-
-**On Windows** the config is a plain file with default permissions — Java cannot set restrictive ACLs portably. If you share the machine, that is worth knowing.
+- Never written to logs, toasts, crash reports, FFmpeg command previews or diagnostic exports, and never in `toString()`
+- Redacted centrally by `SecretRedactor`, which strips the configured keys *and* anything shaped like one; **Copy diagnostics** passes every line through it
+- Entered in a masked field (show / paste / clear); a masked key cannot be copied out of the field
+- Arguments reach FFmpeg as a process argument array, never through a shell
+- On Linux and macOS the config file is `chmod 600` whenever it contains a key. On Windows it keeps default permissions, because Java cannot set restrictive ACLs portably.
 
 ---
 
 ## Audio
 
-Stream-able mixes a stereo program mix for the broadcast while local recordings keep their separate tracks:
-
 ```
 Game ───────────┐
-Microphone ─────┤
-Plasmo Voice ───┼──> program mix ──> AAC ──> stream
-Browser audio ──┘
+Microphone ─────┤ (processed chain)
+Plasmo Voice ───┼──> program mix ──> AAC ──> stream / recording
+Browser audio ──┘   (see limitation below)
 ```
 
-### Plasmo Voice
+The mixer is clocked by time, not by any input: every tick emits exactly the samples elapsed time calls for, so no bus can drift from the video, and a silent input never stalls FFmpeg's muxer.
 
-Proximity chat needs explicit integration: Plasmo Voice does **not** play through Minecraft's audio device, it opens its own OpenAL context, so the loopback capture that picks up game audio never sees it. Without integration, voice chat is simply absent from recordings and streams.
-
-Stream-able registers a Plasmo Voice addon (`pv-addon-streamable`) that captures two things:
-
-- **Other players' voices** — decoded audio from `AudioSourceWriteEvent`, into the Plasmo Voice bus.
-- **Your microphone** — from `AudioCaptureProcessedEvent`, i.e. the signal *after* Plasmo Voice's own noise suppression, gain and activation gating. Viewers therefore hear exactly what other players hear, and the mic is only live while you are actually transmitting rather than permanently open.
-
-Both are observation only — neither event is cancelled or modified, so voice chat behaves exactly as it would without Stream-able. The integration is optional: with the mod absent, the addon class is never loaded and the Audio section says so. Toggle it with **Audio → Capture voice chat**.
-
-Simple Voice Chat is not supported; this pack uses Plasmo Voice.
-
-### Timing
-
-The mixer is clocked by a timer rather than by the game bus. Every tick emits exactly as many samples as elapsed time calls for, mixing in whatever each bus has queued and padding with silence otherwise. That keeps the byte count exactly proportional to elapsed time — so the microphone cannot drift away from the video — and, just as importantly, means the audio stream never goes idle. A silent input would stall FFmpeg's muxer waiting for something to interleave against the video, which stops the broadcast entirely.
+### Plasmo Voice (optional)
+Plasmo Voice plays through its own OpenAL context, so Stream-able integrates through its client API (`pv-addon-streamable`): other players' voices go to the Plasmo Voice bus, and you can choose Plasmo Voice's already-processed microphone as your mic source. Stream-able warns if you stack aggressive noise suppression on top of Plasmo Voice's own. Plasmo Voice is never bundled.
 
 ### Browser audio: a known limitation
-
-**Browser audio cannot currently be mixed into the broadcast.** This is a genuine upstream gap, not an omission:
-
-CEF exposes `CefAudioHandler` (`OnAudioStreamPacket`), which would deliver per-browser PCM cleanly. **That handler does not exist in the JCEF build this mod targets.** MCEF Modern `0.3.3+mc26.1.jcef146.0.10` bundles `me.friwi:jcef-api` at `cef-146.0.10`, whose `org.cef.handler` package contains display, load, render, keyboard, focus, lifespan and request handlers — and no audio handler of any kind. There is no Java API to attach to, with or without a patched MCEF.
-
-What this means in practice:
-
-- You **hear** alert sounds — Chromium plays to the system output device
-- Viewers **do not**, unless you capture system audio yourself
-- Per-source audio settings are still stored and shown, ready for when the capability lands
-- Stream-able will not silently capture your desktop audio to fake support; that would capture every sound on the machine, not just the overlay
+**Browser audio cannot currently be mixed into the broadcast.** CEF has `CefAudioHandler`, but the JCEF build MCEF Modern `0.3.3+mc26.1.jcef146.0.10` ships has no audio handler of any kind, so there is no API to attach to. Page audio plays on your speakers; the Sources page only offers the audio modes that can actually work. Stream-able will not capture your whole desktop to fake it.
 
 ---
 
@@ -201,180 +153,99 @@ What this means in practice:
 | | |
 | --- | --- |
 | Minecraft | **26.1.2** (Java Edition) |
-| Loader | Fabric ≥ 0.19.3 |
+| Loader | Fabric >= 0.19.3 |
 | Java | **25** (what 26.1.2 itself requires) |
 | Fabric API | 0.155.2+26.1.2 |
-| Browser sources | MCEF Modern `0.3.3+mc26.1.jcef146.0.10` — optional |
-| Encoding | FFmpeg, downloaded on request or found on `PATH` |
+| Everything else | Bundled or downloaded on demand - see Components |
 
-### MCEF setup
+### Components (downloaded on demand)
+All pinned in `assets/streamable/runtime/manifest.json` with SHA-256, fetched over HTTPS with resume and retries, extracted with path-traversal and symlink checks, and installed atomically. The **Components** page shows progress, errors, source and licence for each, with Install / Retry / Verify.
 
-Browser sources need [MCEF Modern](https://modrinth.com/mod/mcef-modern). Install it like any Fabric mod.
+| Component | Version | Used for |
+| --- | --- | --- |
+| FFmpeg (BtbN GPL build) | 8.1.3 | All encoding. The 8.1 branch is used because FFmpeg 9 builds need NVIDIA driver 610+ for NVENC. |
+| Chromium engine (jcef-natives) | CEF 146.0.10 | Browser sources |
+| ONNX Runtime | 1.30.0 | Noise cancellation |
+| DPDFNet-2 48 kHz, DPDFNet baseline 16 kHz, GTCRN | pinned revisions | Noise cancellation models |
 
-The pinned build is **`0.3.3+mc26.1.jcef146.0.10`** — the release for the Minecraft 26.1 line, whose `fabric.mod.json` declares `"minecraft": ">=26.1"` and therefore accepts 26.1.2. Do **not** substitute `0.3.3+mc26.2...`; that targets Minecraft 26.2.
-
-MCEF is a **suggested**, not required, dependency. Without it — or if Chromium fails to start — Stream-able logs the reason, shows *"Browser Sources unavailable"*, and recording and streaming carry on working. Chromium downloads itself on first use, asynchronously; sources show a placeholder until it is ready.
-
-### FFmpeg setup
-
-Stream-able looks for FFmpeg in this order:
-
-1. A path you configured
-2. Its own bundle directory (`.minecraft/stream-able/ffmpeg`)
-3. **Record-able's bundle directory** (`.minecraft/recordable/ffmpeg`) — so upgrading does not download a second copy
-4. `PATH`
+FFmpeg lookup order: a path you configure (Components page) > the verified managed install > `ffmpeg` on `PATH` (can be turned off). Old unpinned downloads from Record-able or Stream-able 1.0 are **not executed**, because they were never checksum-verified.
 
 ---
 
-## Upgrading from Record-able
+## Upgrading
 
-- **Your recordings are safe.** Stream-able defaults to the same `recordings` folder. Nothing is moved, renamed or deleted; existing videos simply appear.
-- **Your settings can come with you.** If `config/recordable.json` exists, the Studio home page offers to import it. The old file is never modified, so going back to Record-able still works.
-- **Your FFmpeg download is reused** (see above).
-
-Stream-able writes its own config to `config/stream-able.json` and does not touch Record-able's.
+- **From Stream-able 1.0**: your config migrates automatically (schema 1 to 2). The canvas, outputs and microphone settings are carried over; the old single microphone gain and noise toggle map onto the new chain.
+- **From Record-able**: recordings stay where they are; **Advanced > Import Record-able settings** copies your settings. Record-able's files are never modified.
 
 ---
 
 ## Platforms
 
-Linux and Windows are both first-class.
+Linux and Windows are both first-class. Frame capture reads Minecraft's own render target through OpenGL - **no X11 screen capture, no display-server dependency**, so it works the same on Wayland. Live audio reaches FFmpeg over a loopback TCP socket on both.
 
-Frame capture reads Minecraft's own render target through OpenGL, so there is **no X11 screen capture and no display-server dependency** — it works the same under Wayland. Live audio reaches FFmpeg over a loopback TCP socket rather than a named pipe, because `mkfifo` does not exist on Windows and Java cannot create a Win32 named pipe without native code.
-
-Platform-specific behaviour is isolated rather than assumed:
-
-| Concern | Linux | Windows |
-| --- | --- | --- |
-| FFmpeg binary | `ffmpeg` | `ffmpeg.exe`, auto-downloaded from gyan.dev |
-| Live audio transport | loopback TCP | loopback TCP (no `mkfifo` needed) |
-| Frame capture | Minecraft's render target via OpenGL — no X11, works on Wayland | same |
-| Browser native | `libjcef.so` | `jcef.dll` |
-| Config permissions | `chmod 600` when it holds a stream key | default ACLs — see the security note |
-| Microphone | Java Sound (ALSA/PipeWire) | Java Sound (WASAPI/DirectSound) |
-
-If browser sources fail to start on Windows, the cause is almost always a missing **Microsoft Visual C++ Redistributable (x64)** or an interrupted runtime download; Stream-able detects the failure and says so rather than printing the raw linker error.
+**Browser sources on NixOS / Guix and other non-FHS systems.** The downloaded Chromium links against about 28 system libraries (`libnss3`, `libgbm`, `libX11`, ...). Stream-able detects missing ones with `ldd` and prints the real cause instead of the misleading "cannot open shared object file". Run the launcher in an FHS environment (`steam-run`) or add the listed libraries to `programs.nix-ld.libraries`. Recording and streaming keep working either way.
 
 ---
 
 ## Known issues
 
-**MCEF issue #4 — editing keys in off-screen browsers.**
-[Upstream issue](https://github.com/DimasKama/mcef-modern/issues/4): MCEF forwards a key press as an AWT `KEY_PRESSED`, which java-cef translates to `KEYEVENT_RAWKEYDOWN`. There is no path to `KEYEVENT_KEYDOWN`, and Blink's editing commands for Backspace and Enter are not reached from a bare raw-keydown in the OSR pipeline. The symptom is that you can type `hello` into a page but cannot delete a character or submit the field.
+- **MCEF issue #4 (Backspace / Enter in off-screen browsers).** Stream-able sends the character events a real keyboard would, through MCEF's public API, plus a self-verifying JavaScript fallback that only acts if the page did not change. See the source for details.
+- **Browser audio does not reach the broadcast** (see Audio).
+- **Per-destination `tee` reporting is coarse** for destinations sharing an encoder.
+- **Shader mods** replace parts of the render pipeline; Stream-able hooks the tail of `GameRenderer.render`, the most compatible point available, but exotic pipelines may interact badly.
 
-Stream-able handles this in two layers:
+---
 
-1. **Correct event emulation.** A real keyboard produces *both* a key-down and a character message for these keys — `WM_CHAR 0x08` for Backspace, `0x0D` for Enter. MCEF already exposes `onCharTyped`, which maps to `KEYEVENT_CHAR`, so Stream-able sends the character event the platform would have sent. This uses only MCEF's public API: no fork, no reflection, no patched jar. Printable keys are excluded — Minecraft already delivers those, and synthesising a second one would type every letter twice. Shortcuts (`Ctrl+…`) are excluded too, so `Ctrl+A`/`C`/`V`/`X` keep working.
-2. **A self-verifying JavaScript fallback**, injected on every page load. It watches for an editing key, lets the browser's own default action run first, and performs the edit itself *only if the DOM verifiably did not change*. It therefore cannot double-delete, only ever touches the focused editable element, and goes dormant automatically if MCEF or JCEF fixes the underlying bug — with no configuration.
+## Verification status
 
-It deliberately does **not** blanket-run `document.execCommand('delete')` on every Backspace, which would corrupt input on pages where the native path already works.
+What has been checked, and how (Stream-able 1.1.0):
 
-**Browser sources on NixOS / Guix and other non-FHS systems.**
-MCEF downloads a prebuilt Chromium. On a distribution without `/usr/lib` it cannot find the ~28 system libraries it links against (`libnss3`, `libgbm`, `libX11`, `libstdc++`, …), and Linux reports this as the misleading
-
-```
-.../libjcef.so: cannot open shared object file: No such file or directory
-```
-
-naming a file that is present. Stream-able detects this: it checks whether the library actually exists, runs `ldd` to list what is genuinely missing, and prints the real cause plus NixOS-specific guidance instead of the raw error. Recording and streaming keep working; only browser sources are disabled.
-
-To fix it, run the launcher in an FHS environment:
-
-```bash
-nix-shell -p steam-run --run "steam-run prismlauncher"
-```
-
-or enable `programs.nix-ld` and list the reported libraries (`nss`, `nspr`, `glib`, `gtk3`, `at-spi2-atk`, `cups`, `dbus`, `libdrm`, `mesa`, `expat`, the `xorg` libraries, `libxkbcommon`, `pango`, `cairo`, `alsa-lib`, `stdenv.cc.cc.lib`).
-
-Other known limitations:
-
-- **Browser audio does not reach the broadcast** (see Audio, above)
-- **Per-slave `tee` reporting is coarse.** Destinations sharing an encoder are marked live together; individual failures are attributed by matching the ingest URL in FFmpeg's output. A destination with its own encoder has fully independent state.
-- **Shader mods** replace parts of the render pipeline. Stream-able composites from `Minecraft.getMainRenderTarget()` at the tail of the render pass, which is the most compatible point available, but exotic pipelines may still interact badly.
-- **Runtime behaviour is not machine-verified in this build.** The logic is unit-tested (121 tests) and the project compiles, but the acceptance tests in the table below require a real GPU, a display and live ingest credentials.
+- **Unit and integration tests** (`./gradlew test`, 40 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility.
+- **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters.
+- **Not verified on real services or hardware**: publishing to Twitch/YouTube/X, Windows, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
 
 ---
 
 ## Building from source
 
 ```bash
-./gradlew build
+./gradlew build         # jar in build/libs/
+./gradlew test          # tests, no Minecraft needed
+./gradlew runClient     # dev client
+./gradlew test -Dstreamable.benchmarks=true --tests '*DspBenchmarkTest*'   # DSP cost on your machine
 ```
 
-That is the whole story: no IDE step, no manual dependency wrangling. The jar lands in `build/libs/`.
-
-```bash
-./gradlew test          # unit tests only, no Minecraft needed
-./gradlew runClient     # launch a dev client
-```
-
-Every dependency is pinned in `gradle.properties` — no `latest.release` anywhere.
-
-**A note on mappings:** Minecraft 26.x ships **deobfuscated**. Mojang publishes no `client_mappings` for 26.1.2 and no Yarn build exists, because there is nothing left to map. The buildscript therefore declares no mapping layer, exactly like MCEF Modern's does for the same Minecraft line.
-
----
-
-## Manual acceptance tests
-
-These need a real client and cannot be automated here.
-
-| | Test | Expected |
-| --- | --- | --- |
-| A | Record 60 s | Game audio and mic present, video plays, no drift |
-| B | Stream to a custom RTMP endpoint | Gameplay, game audio and mic arrive; clean stop |
-| C | Enable 3 destinations | All go `Live`; disabling one leaves the other two `Live` |
-| D | Load a transparent page | No black or white rectangle; Minecraft visible through it |
-| E | Move / resize / Shift-stretch / rotate 37° | Renders correctly throughout |
-| F | Click buttons in a rotated source | The correct button receives the click |
-| G | Type `abcdef`, Backspace, Enter, Ctrl+A, Ctrl+V | All behave correctly despite MCEF issue #4 |
-| H | View the remote stream | Browser sources appear **on stream**, not just locally |
-| I | Interrupt the network | Minecraft stays responsive; reconnect backs off correctly |
-| J | Create/delete sources repeatedly | No runaway Chromium processes, no native memory growth |
-
-The bundled test page (**Advanced → Add browser test page**) covers D, F, G and J directly.
+Every dependency is pinned in `gradle.properties`. Minecraft 26.x ships deobfuscated, so the buildscript declares no mapping layer.
 
 ---
 
 ## Architecture
 
-```
-Minecraft render thread
-        |
-        v
-ProgramCompositor  ──  browser sources drawn in z-order
-        |                (off-screen framebuffer)
-        v
-   PBO readback
-        |
-        +--> RecordingController ──> FFmpeg ──> file
-        |
-        +--> StreamController ────> FFmpeg ──> tee ──┬──> Twitch
-                                                     ├──> YouTube
-                                                     └──> Custom RTMPS
-```
-
-The output frame is built off-screen from the *clean* game image, **then** local overlays are drawn to the screen. That ordering is what lets a source appear on stream but not on your monitor, and guarantees edit handles never reach viewers.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
 dev/streamable/
-  audio/        buses, mixer, capture (ported), live PCM transport, WAV writer
-  browser/      engine-neutral abstraction; mcef/ input/ css/ audio/ backends
-  compositor/   program canvas, GL program, off-screen compositing, editor overlay
-  config/       versioned settings, atomic IO, Record-able import
-  ffmpeg/       binary discovery, capability probing, command building, processes
-  recording/    recording state machine, metadata, disk guardian
-  source/       source model, z-ordering; transform/ geometry and the editor
-  streaming/    destinations, grouping, encoder groups, health, reconnect
-  ui/           Studio, source editor, health HUD, widgets
-  mixin/        the single render hook
+  runtime/      pinned, verified, atomic downloads (FFmpeg, Chromium, ONNX Runtime, models)
+  video/        resolutions, aspect classes, scaling maths, validation
+  compositor/   program canvas, GPU scaling, PBO readback, game snapshot, local overlay
+  pipeline/     per-output frame pacing and capture
+  ffmpeg/       discovery, capability probe, command building, processes, progress
+  recording/    recording state machine, audio tracks, muxing
+  streaming/    destinations, encoder groups, health, reconnect; test/ destination tester
+  audio/        buses and mixer; dsp/ chain stages; ai/ noise cancellation; mic/ capture,
+                calibration, presets, test, monitoring
+  browser/      MCEF integration, runtime, input, CSS, audio bridge
+  source/       source model, z-order; transform/ geometry and the editor
+  diagnostics/  Stream Health report, redacted diagnostics
+  config/       versioned settings, migration, atomic IO, Record-able import
+  ui/           kit/ design system; studio/ Studio pages; HUD; canvas editor
+  mixin/        the render hook and GUI renderer accessor; audio library hook
 ```
 
 ---
 
 ## License and attribution
 
-Stream-able is MIT licensed and is a derivative work of **Record-able** by JoEusebe, whose copyright notice is retained in `LICENSE` as the MIT License requires. `NOTICE` lists exactly which files were inherited and what changed.
-
-Browser support is provided by **MCEF Modern** (LGPL-2.1) by DimasKama, built on JCEF and the Chromium Embedded Framework. FFmpeg is invoked as an external process and never bundled.
+Stream-able is MIT licensed and is a derivative work of **Record-able** by JoEusebe, whose copyright notice is retained in `LICENSE`. `NOTICE` lists the inherited files and every third-party component, what is bundled (MCEF Modern under LGPL-2.1, unmodified and replaceable; XZ for Java; the Inter font) and what is downloaded (FFmpeg under the GPL, run as a separate program; Chromium; ONNX Runtime; the noise models), with their licences.
 
 No OBS Studio code or assets are used. OBS is referenced only as inspiration for workflow and terminology.
