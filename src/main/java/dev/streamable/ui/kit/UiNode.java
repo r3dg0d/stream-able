@@ -149,7 +149,7 @@ public abstract class UiNode {
         press.update(pressed ? 1 : 0, p.delta());
         renderSelf(p);
         renderChildren(p);
-        if (isFocused() && showFocusRing()) {
+        if (isFocused() && showFocusRing() && screen() != null && screen().focusVisible()) {
             p.roundBorder(x - 1.5f, y - 1.5f, width + 3, height + 3, Theme.RADIUS + 1.5f, 1f, Theme.FOCUS_RING);
         }
     }

@@ -59,7 +59,7 @@ final class RuntimePage {
         head.add(new Widgets.SectionHeader(runtime.displayName(), () -> "Version " + runtime.version()
                 + sizeText(runtime)), -1);
         head.add(new Widgets.StatusPill(() -> runtime.progress().summary(), () -> stateColor(runtime.state()),
-                runtime.state().isBusy()), 150);
+                runtime.state().isBusy()).alignRight(), 150);
         card.add(new Widgets.ProgressBar(() -> runtime.progress().fraction(), () -> Theme.ACCENT))
                 .visibleWhen(() -> runtime.state().isBusy());
         card.add(new Widgets.Notice(() -> runtime.state() == RuntimeState.FAILED ? runtime.progress().detail() : null,

@@ -154,7 +154,8 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                 double secondsLeft = bytesPerSecond > 0 ? in.freeDiskBytes() / bytesPerSecond : -1;
                 Severity disk = secondsLeft >= 0 && secondsLeft < 1800 ? Severity.CRITICAL
                         : secondsLeft >= 0 && secondsLeft < 7200 ? Severity.WARNING : Severity.OK;
-                metrics.add(new Metric("Recording", "Disk time remaining", secondsLeft < 0 ? "-" : duration((long) (secondsLeft * 1000)),
+                metrics.add(new Metric("Recording", "Disk time remaining", secondsLeft < 0 ? "-"
+                        : secondsLeft > 99 * 3600 ? "more than 99 hours" : duration((long) (secondsLeft * 1000)),
                         "Free space divided by the recording's current data rate.", disk));
                 if (disk != Severity.OK) {
                     findings.add(new Finding(disk, "Disk space may run out during this recording (about "

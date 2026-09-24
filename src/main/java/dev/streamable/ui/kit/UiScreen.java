@@ -24,6 +24,8 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
 
     private final UiNode.RootNode root = new UiNode.RootNode(this);
     private UiNode focused;
+    /** Focus rings show only after keyboard navigation, not after a click. */
+    private boolean focusVisible;
     private UiNode captured;
     private UiNode popup;
     private long lastFrame = System.nanoTime();
@@ -60,6 +62,10 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
 
     public UiNode focusedNode() {
         return focused;
+    }
+
+    public boolean focusVisible() {
+        return focusVisible;
     }
 
     public void focusNode(UiNode node) {
@@ -245,6 +251,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
 
     /** Sends a press to the deepest node under the pointer, bubbling up to {@code scope}. */
     private boolean dispatchDown(UiNode scope, double mx, double my, int button) {
+        focusVisible = false;
         UiNode target = scope.hit(mx, my);
         for (UiNode node = target; node != null; node = node == scope ? null : node.parent) {
             if (node.isEnabled() && node.mouseDown(mx, my, button)) {
@@ -363,6 +370,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         int index = focused == null ? -1 : order.indexOf(focused);
         int next = index < 0 ? (direction > 0 ? 0 : order.size() - 1)
                 : Math.floorMod(index + direction, order.size());
+        focusVisible = true;
         focusNode(order.get(next));
     }
 

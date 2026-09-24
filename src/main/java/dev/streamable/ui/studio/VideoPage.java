@@ -181,7 +181,9 @@ final class VideoPage {
         wh.add(s.intField("Height", () -> output.height, v -> output.height = v, 16, Resolution.MAX_DIMENSION)
                 .enabledWhen(() -> idle(client)), -1);
         size.add(s.enumDropdown("Scaling", ScalingMode.values(), ScalingMode::displayName,
-                () -> output.mode, v -> output.mode = v).enabledWhen(() -> idle(client)));
+                () -> output.mode, v -> output.mode = v).enabledWhen(() -> idle(client))
+                .tooltip("Native: 1:1 pixels. Fit: whole picture, bars if shapes differ. Fill: no bars, crops the "
+                        + "edges. Center Crop: the central region at full sharpness. Stretch: distorts to fill."));
         if (streaming) {
             size.add(Button.of("Use suggested size", () -> {
                 Resolution suggested = ResolutionPresets.suggestedStreamOutput(client.canvasResolution());
@@ -230,15 +232,7 @@ final class VideoPage {
 
     private static String describe(StreamAbleClient client, VideoSettings.Output output) {
         Resolution canvas = client.canvasResolution();
-        OutputTransform t = OutputTransform.compute(canvas, output.resolve(canvas), output.effectiveMode());
-        String text = t.describe() + ".";
-        if (t.hasBars()) {
-            text += t.isPillarboxed() ? " Black bars at the sides." : " Black bars above and below.";
-        }
-        if (t.distorts()) {
-            text += " The picture is distorted.";
-        }
-        return text + " " + output.effectiveMode().description();
+        return OutputTransform.compute(canvas, output.resolve(canvas), output.effectiveMode()).describe() + ".";
     }
 
     private static List<OutputValidation.Issue> issues(Studio s, VideoSettings.Output output,

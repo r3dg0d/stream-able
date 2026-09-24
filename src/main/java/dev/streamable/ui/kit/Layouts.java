@@ -99,7 +99,10 @@ public final class Layouts {
                 }
                 int w = widths.get(i);
                 int actual = w > 0 ? w : (shares == 0 ? 0 : free * Math.max(1, -w) / shares);
-                child.setBounds(cx, y, actual, height);
+                // Children keep their own height, bottom-aligned, so a button
+                // lines up with the box of a labelled field beside it.
+                int h = Math.min(height, child.preferredHeight(actual));
+                child.setBounds(cx, y + height - h, actual, h);
                 cx += actual + gap;
             }
         }
@@ -272,7 +275,8 @@ public final class Layouts {
                     rowH = Math.max(rowH, cells.get(i).preferredHeight(cellW));
                 }
                 for (int i = start; i < Math.min(cells.size(), start + cols); i++) {
-                    cells.get(i).setBounds(x + (i - start) * (cellW + gap), cy, cellW, rowH);
+                    int h = cells.get(i).preferredHeight(cellW);
+                    cells.get(i).setBounds(x + (i - start) * (cellW + gap), cy + rowH - h, cellW, h);
                 }
                 cy += rowH + gap;
             }

@@ -127,7 +127,9 @@ final class DestinationsPage {
             String status = !destination.enabled() ? "Off" : problem != null ? "Needs setup"
                     : destination.state().displayName();
             int sw = p.textWidth(status, Theme.TEXT_CAPTION, Painter.Weight.REGULAR);
-            p.textClipped(destination.name() + "  ·  " + destination.platform().displayName(), x + 16, y + 6,
+            String title = destination.name().equals(destination.platform().displayName()) ? destination.name()
+                    : destination.name() + "  ·  " + destination.platform().displayName();
+            p.textClipped(title, x + 16, y + 6,
                     width - 60 - sw, Theme.TEXT, 1f, selected ? Painter.Weight.SEMIBOLD : Painter.Weight.REGULAR);
             p.text(status, x + width - 42 - sw, y + 7, problem != null && destination.enabled() ? Theme.WARNING
                     : Theme.TEXT_MUTED, Theme.TEXT_CAPTION, Painter.Weight.REGULAR);
@@ -297,10 +299,15 @@ final class DestinationsPage {
 
         Layouts.Grid metrics = card.add(new Layouts.Grid(96, Theme.SPACE_4));
         metrics.visibleWhen(() -> sessionFor(client, d) != null);
-        metrics.add(new Widgets.MetricCard("Upload", () -> kbps(metricsOf(client, d).achievedKbps()),
-                () -> uploadColor(metricsOf(client, d)), () -> "target " + metricsOf(client, d).targetKbps() + " kbps"));
+        boolean upload = plan.mode() == StreamTestPlan.Mode.SERVICE_BANDWIDTH_TEST;
+        metrics.add(new Widgets.MetricCard(upload ? "Upload now" : "Bitrate now", () -> {
+            StreamTestSession session = sessionFor(client, d);
+            return session != null && session.isRunning() ? kbps(metricsOf(client, d).achievedKbps()) : "-";
+        }, () -> upload ? uploadColor(metricsOf(client, d).achievedKbps(), metricsOf(client, d).targetKbps()) : Theme.TEXT,
+                () -> "target " + metricsOf(client, d).targetKbps() + " kbps"));
         metrics.add(new Widgets.MetricCard("Average", () -> kbps(metricsOf(client, d).averageKbps()),
-                () -> Theme.TEXT, () -> "over the test"));
+                () -> upload ? uploadColor(metricsOf(client, d).averageKbps(), metricsOf(client, d).targetKbps()) : Theme.TEXT,
+                () -> upload ? "delivered to the service" : "encoded locally"));
         metrics.add(new Widgets.MetricCard("Encoder", () -> {
             StreamTestMetrics m = metricsOf(client, d);
             return m.encoderFps() < 0 ? "-" : String.format(Locale.ROOT, "%.0f FPS", m.encoderFps());
@@ -322,8 +329,13 @@ final class DestinationsPage {
         card.add(new Label(() -> {
             List<String> findings = metricsOf(client, d).findings();
             return findings.isEmpty() ? "" : "• " + String.join("\n• ", findings);
-        }).color(Theme.TEXT).wrap()).visibleWhen(() -> sessionFor(client, d) != null
-                && !metricsOf(client, d).findings().isEmpty());
+        }).color(Theme.TEXT).wrap()).visibleWhen(() -> {
+            StreamTestSession session = sessionFor(client, d);
+            List<String> findings = metricsOf(client, d).findings();
+            // A failure's single finding is the message already shown above.
+            return session != null && !findings.isEmpty()
+                    && !(findings.size() == 1 && findings.getFirst().equals(session.message()));
+        });
     }
 
     private static StreamTestMetrics metricsOf(StreamAbleClient client, StreamDestination d) {
@@ -335,11 +347,11 @@ final class DestinationsPage {
         return value < 0 ? "-" : String.format(Locale.ROOT, "%,d kbps", Math.round(value));
     }
 
-    private static int uploadColor(StreamTestMetrics m) {
-        if (m.achievedKbps() < 0 || m.targetKbps() <= 0) {
+    private static int uploadColor(double kbps, int targetKbps) {
+        if (kbps < 0 || targetKbps <= 0) {
             return Theme.TEXT;
         }
-        double ratio = m.achievedKbps() / m.targetKbps();
+        double ratio = kbps / targetKbps;
         return ratio >= 0.9 ? Theme.SUCCESS : ratio >= 0.7 ? Theme.WARNING : Theme.DANGER;
     }
 

@@ -15,9 +15,9 @@ import java.util.Locale;
  * The EQ's combined frequency response, computed from the same biquad
  * designs the DSP uses, on a log-frequency axis.
  *
- * <p>Each enabled band has a handle: drag it to change frequency and gain,
- * scroll over it to change Q (bandwidth). With keyboard focus, the arrow keys
- * move the selected band and Tab-cycling selects bands with [ and ].</p>
+ * <p>Each band has a handle: drag it to change frequency and gain. Once the
+ * graph has focus (click it), scrolling over a handle changes Q (bandwidth),
+ * [ and ] select a band, and the arrow keys move it.</p>
  */
 final class EqGraph extends UiNode {
 
@@ -31,7 +31,7 @@ final class EqGraph extends UiNode {
 
     EqGraph(Studio studio) {
         this.studio = studio;
-        tooltip("Drag a handle to change frequency and gain; scroll over it to change bandwidth (Q).");
+        tooltip("Drag a handle to change frequency and gain. Click the graph, then scroll over a handle to change bandwidth (Q).");
     }
 
     private MicrophoneSettings.Equalizer eq() {
@@ -168,6 +168,9 @@ final class EqGraph extends UiNode {
 
     @Override
     public boolean mouseScroll(double mx, double my, double amount) {
+        if (!isFocused()) {
+            return false;   // click the graph first; plain scrolling moves the page
+        }
         int near = bandNear(mx, my);
         if (near < 0) {
             return false;

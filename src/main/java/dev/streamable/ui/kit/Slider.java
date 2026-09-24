@@ -116,7 +116,9 @@ public final class Slider extends UiNode {
 
     @Override
     public boolean mouseScroll(double mx, double my, double amount) {
-        if (!isEnabled()) {
+        // Only a focused slider takes the wheel; otherwise scrolling the page
+        // over a slider would silently change the setting under the pointer.
+        if (!isEnabled() || !isFocused()) {
             return false;
         }
         set(value.getAsDouble() + Math.signum(amount) * step);

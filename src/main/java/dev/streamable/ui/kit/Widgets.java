@@ -65,11 +65,18 @@ public final class Widgets {
         private final Supplier<String> text;
         private final IntSupplier color;
         private final boolean pulse;
+        private boolean alignRight;
 
         public StatusPill(Supplier<String> text, IntSupplier color, boolean pulse) {
             this.text = text;
             this.color = color;
             this.pulse = pulse;
+        }
+
+        /** Draws the pill against the right edge of its slot instead of the left. */
+        public StatusPill alignRight() {
+            this.alignRight = true;
+            return this;
         }
 
         public int naturalWidth(Painter p) {
@@ -83,7 +90,8 @@ public final class Widgets {
 
         @Override
         protected void renderSelf(Painter p) {
-            drawPill(p, x, y, text.get(), color.getAsInt(), pulse);
+            int px = alignRight ? x + width - naturalWidth(p) : x;
+            drawPill(p, px, y, text.get(), color.getAsInt(), pulse);
         }
 
         public static int drawPill(Painter p, int px, int py, String label, int c, boolean pulse) {

@@ -106,6 +106,8 @@ final class PreviewNode extends UiNode {
         float fh = (float) (t.srcH() * scale);
         p.roundBorder(fx, fy, fw, fh, 1, 1.25f, Theme.withAlpha(color, 0.9f));
         String label = name + " " + output.label() + " · " + mode.displayName();
-        p.text(label, fx + 4, fy + fh - 10, color, Theme.TEXT_CAPTION, Painter.Weight.SEMIBOLD);
+        int lw = p.textWidth(label, Theme.TEXT_CAPTION, Painter.Weight.SEMIBOLD);
+        p.roundRect(fx + 2, fy + fh - 12, lw + 6, 10, Theme.RADIUS_SMALL, 0xCC000000);
+        p.text(label, fx + 5, fy + fh - 10, color, Theme.TEXT_CAPTION, Painter.Weight.SEMIBOLD);
     }
 }
