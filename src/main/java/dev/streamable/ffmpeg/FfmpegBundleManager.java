@@ -34,7 +34,7 @@ public final class FfmpegBundleManager {
         return executable.getNameCount() > 1 && parent != null ? parent : null;
     }
 
-    /** Whether a Stream-able managed (or reused Record-able) FFmpeg is in use. */
+    /** Whether a managed or explicitly configured FFmpeg (not one found on PATH) is in use. */
     public static boolean isBundledFfmpegAvailable() {
         FFmpegManager.Resolution resolution = FFmpegManager.shared().resolution();
         return resolution.isAvailable() && resolution.origin() != FFmpegManager.Origin.SYSTEM_PATH;

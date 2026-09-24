@@ -15,13 +15,13 @@ import dev.streamable.ffmpeg.FFmpegRuntime;
 import dev.streamable.pipeline.VideoPipeline;
 import dev.streamable.recording.RecordingController;
 import dev.streamable.runtime.RuntimeManager;
-import dev.streamable.runtime.RuntimeState;
 import dev.streamable.source.BrowserSource;
 import dev.streamable.source.OutputRouting;
 import dev.streamable.source.SourceList;
 import dev.streamable.source.transform.SourceEditor;
 import dev.streamable.streaming.StreamController;
 import dev.streamable.streaming.StreamDestination;
+import dev.streamable.ffmpeg.VideoEncoder;
 import dev.streamable.streaming.StreamHealth;
 import dev.streamable.streaming.StreamPlatform;
 import dev.streamable.streaming.StreamingCredentials;
@@ -78,6 +78,12 @@ public final class StreamAbleClient {
     private final FFmpegCapabilityProbe encoderProbe;
     private final RecordingController recording;
     private final StreamController streaming;
+    private final dev.streamable.streaming.test.StreamTestController streamTests =
+            new dev.streamable.streaming.test.StreamTestController();
+    private dev.streamable.diagnostics.HealthReport cachedHealth;
+    private long cachedHealthAt;
+    private long cachedFreeDisk = -1;
+    private long cachedFreeDiskAt;
 
     private java.io.OutputStream mixerTapConsumer;
     private final java.util.function.Consumer<byte[]> streamAudioSink = this::submitStreamAudio;
@@ -95,9 +101,10 @@ public final class StreamAbleClient {
         this.ffmpegRuntime = runtimes.register(new FFmpegRuntime(runtimes.context()));
         this.browserRuntime = runtimes.register(new dev.streamable.browser.BrowserRuntime(
                 runtimes.context(), BrowserSourceManager.mcefJcefDirectory()));
-        this.ffmpeg = new FFmpegManager(gameDirectory);
+        this.ffmpeg = new FFmpegManager();
         this.ffmpeg.setManagedRuntime(ffmpegRuntime);
         this.ffmpeg.setConfiguredPath(config.runtime.ffmpegOverridePath);
+        this.ffmpeg.setAllowSystemPath(config.runtime.allowSystemFfmpeg);
         FFmpegManager.initShared(ffmpeg);
         this.encoderProbe = new FFmpegCapabilityProbe(ffmpeg);
 
@@ -298,11 +305,8 @@ public final class StreamAbleClient {
 
     /** Re-resolves the binary and re-probes encoders after an install or settings change. */
     public void onFfmpegChanged() {
+        ffmpeg.setAllowSystemPath(config.runtime.allowSystemFfmpeg);
         FFmpegManager.Resolution resolution = ffmpeg.refresh(config.runtime.ffmpegOverridePath);
-        if (!config.runtime.allowSystemFfmpeg && resolution.origin() == FFmpegManager.Origin.SYSTEM_PATH
-                && ffmpegRuntime.state() != RuntimeState.READY) {
-            StreamAbleLog.FFMPEG.info("System FFmpeg on PATH ignored by settings.");
-        }
         encoderProbe.invalidate();
         if (resolution.isAvailable()) {
             StreamAbleLog.CORE.info("Using FFmpeg: {} ({})", resolution.version(), resolution.describe());
@@ -372,6 +376,24 @@ public final class StreamAbleClient {
         applyInterfaceSettings();
         markDirty();
         return null;
+    }
+
+    /**
+     * Freezes the current game picture for the outputs before a Stream-able
+     * screen is drawn. Called when such a screen is opened: the main
+     * framebuffer still holds the last frame drawn without it, so outputs and
+     * the Studio preview never show Stream-able's own menus. Skipped when the
+     * previous screen was also Stream-able's (its frame contains that screen).
+     */
+    public void freezeGameForStudio(net.minecraft.client.gui.screens.Screen previous) {
+        if (previous instanceof dev.streamable.ui.StreamAbleScreen || !config.video.hideStudioFromOutputs) {
+            return;
+        }
+        try {
+            compositor.snapshotGame();
+        } catch (RuntimeException e) {
+            StreamAbleLog.COMPOSITOR.debug("Could not freeze the game frame", e);
+        }
     }
 
     /** Marks the config for saving; writes are debounced to avoid disk churn. */
@@ -592,6 +614,52 @@ public final class StreamAbleClient {
         return streaming.health();
     }
 
+    public dev.streamable.streaming.test.StreamTestController streamTests() {
+        return streamTests;
+    }
+
+    /**
+     * Starts a destination test with the current streaming settings. Refused
+     * while live: the test would compete with the broadcast for the encoder
+     * and the uplink it is trying to measure.
+     *
+     * @return {@code null} when started, otherwise why not
+     */
+    public String startDestinationTest(StreamDestination destination, int seconds) {
+        VideoEncoder encoder = encoderProbe.resolve(config.streaming.encoder, true);
+        if (encoder == null) {
+            return "No usable stream encoder was found yet.";
+        }
+        return streamTests.start(destination, config.streaming.encodeProfile(encoder, streamingOutput()),
+                ffmpeg.resolution().executable(), seconds, streaming.isLive());
+    }
+
+    /**
+     * Stream Health report, rebuilt at most twice a second so that drawing it
+     * every frame costs nothing. Free disk space is sampled every 5 seconds.
+     */
+    public dev.streamable.diagnostics.HealthReport healthReport() {
+        long now = System.currentTimeMillis();
+        if (cachedHealth != null && now - cachedHealthAt < 500) {
+            return cachedHealth;
+        }
+        boolean recordingActive = recording.isActive();
+        if (now - cachedFreeDiskAt > 5_000) {
+            cachedFreeDisk = recording.freeDiskBytes();
+            cachedFreeDiskAt = now;
+        }
+        boolean micCapturing = microphone.isCapturing();
+        cachedHealth = dev.streamable.diagnostics.HealthReport.build(new dev.streamable.diagnostics.HealthReport.Inputs(
+                video.stats(), health(), recordingActive,
+                recordingActive ? recording.elapsedMillis() : 0,
+                recordingActive ? recording.currentFileSizeBytes() : 0,
+                cachedFreeDisk, config.recording.bitrateKbps,
+                micCapturing ? microphone.processor().stats() : null,
+                microphone.noise().status(), micCapturing));
+        cachedHealthAt = now;
+        return cachedHealth;
+    }
+
     // ---- destination persistence -------------------------------------------
 
     private List<StreamDestination> loadDestinations() {
@@ -630,6 +698,7 @@ public final class StreamAbleClient {
     /** Releases every native resource. Called on client shutdown. */
     public void shutdown() {
         try {
+            streamTests.cancel();
             if (recording.isActive()) {
                 stopRecording();
             }

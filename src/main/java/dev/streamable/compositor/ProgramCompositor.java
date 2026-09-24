@@ -147,7 +147,7 @@ public final class ProgramCompositor implements AutoCloseable {
      */
     public void snapshotGame() {
         GameTexture game = gameTexture();
-        if (game == null || broken) {
+        if (game == null || broken || !quadRenderer.initialise()) {
             return;
         }
         try {

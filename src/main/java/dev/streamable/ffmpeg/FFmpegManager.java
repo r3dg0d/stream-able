@@ -22,17 +22,16 @@ public final class FFmpegManager {
 
     private static final long PROBE_TIMEOUT_SECONDS = 15;
 
-    private final Path gameDirectory;
     private volatile Resolution resolution;
     private volatile FFmpegRuntime managed;
     private volatile String configuredPath = "";
+    private volatile boolean allowSystemPath = true;
 
-    public FFmpegManager(Path gameDirectory) {
-        this.gameDirectory = gameDirectory;
+    public FFmpegManager() {
     }
 
     /** Where a resolved binary came from. */
-    public enum Origin { CONFIGURED, MANAGED, MANAGED_PREVIOUS, STREAM_ABLE_BUNDLE, RECORD_ABLE_BUNDLE, SYSTEM_PATH, NONE }
+    public enum Origin { CONFIGURED, MANAGED, MANAGED_PREVIOUS, SYSTEM_PATH, NONE }
 
     /**
      * @param executable absolute path or bare command name; empty when not found
@@ -50,33 +49,10 @@ public final class FFmpegManager {
                 case CONFIGURED -> "Expert override path";
                 case MANAGED -> "Managed by Stream-able (verified)";
                 case MANAGED_PREVIOUS -> "Previous Stream-able runtime (update pending)";
-                case STREAM_ABLE_BUNDLE -> "Legacy Stream-able download";
-                case RECORD_ABLE_BUNDLE -> "Reused from an existing Record-able install";
                 case SYSTEM_PATH -> "Found on PATH";
                 case NONE -> "Not found";
             };
         }
-    }
-
-    /**
-     * Directory Stream-able downloads FFmpeg into.
-     *
-     * <p>The {@code bin} segment matches what {@link FfmpegBundleManager} writes,
-     * so both classes agree on where the binary lives.</p>
-     */
-    public Path bundleDirectory() {
-        return gameDirectory.resolve("stream-able").resolve("ffmpeg").resolve("bin");
-    }
-
-    /**
-     * Record-able's bundle directory.
-     *
-     * <p>Checked deliberately: a player upgrading from Record-able already has a
-     * verified FFmpeg build on disk, and downloading a second copy of it would
-     * be pure waste.</p>
-     */
-    public Path legacyBundleDirectory() {
-        return gameDirectory.resolve("recordable").resolve("ffmpeg").resolve("bin");
     }
 
     private static boolean isWindows() {
@@ -100,6 +76,11 @@ public final class FFmpegManager {
     /** The expert override path; blank means "no override". */
     public void setConfiguredPath(String path) {
         this.configuredPath = path == null ? "" : path.trim();
+    }
+
+    /** Whether an {@code ffmpeg} on the system PATH may be used when nothing better exists. */
+    public void setAllowSystemPath(boolean allow) {
+        this.allowSystemPath = allow;
     }
 
     /** Cached resolution, resolving on first use. */
@@ -138,26 +119,21 @@ public final class FFmpegManager {
                 candidates.add(java.util.Map.entry(previous, Origin.MANAGED_PREVIOUS));
             }
         }
-        candidates.add(java.util.Map.entry(bundleDirectory().resolve(executableName()),
-                Origin.STREAM_ABLE_BUNDLE));
-        candidates.add(java.util.Map.entry(legacyBundleDirectory().resolve(executableName()),
-                Origin.RECORD_ABLE_BUNDLE));
 
         for (var candidate : candidates) {
             Path path = candidate.getKey();
             if (Files.isRegularFile(path) && (Files.isExecutable(path) || isWindows())) {
                 String version = queryVersion(path.toAbsolutePath().toString());
                 if (version != null) {
-                    if (candidate.getValue() == Origin.RECORD_ABLE_BUNDLE) {
-                        StreamAbleLog.FFMPEG.info(
-                                "Reusing the FFmpeg binary already downloaded by Record-able.");
-                    }
                     return new Resolution(path.toAbsolutePath().toString(), candidate.getValue(), version);
                 }
             }
         }
 
-        String version = queryVersion("ffmpeg");
+        // Old unpinned downloads (Record-able's, or Stream-able 1.0's bundle
+        // folder) are deliberately not used: they were never checksum-verified,
+        // so they are not executed. The managed runtime replaces them.
+        String version = allowSystemPath ? queryVersion("ffmpeg") : null;
         if (version != null) {
             return new Resolution("ffmpeg", Origin.SYSTEM_PATH, version);
         }
@@ -211,14 +187,14 @@ public final class FFmpegManager {
         shared = manager;
     }
 
-    /** The shared instance, falling back to the working directory if not yet set. */
+    /** The shared instance, created on first use if mod init has not set it yet. */
     public static FFmpegManager shared() {
         FFmpegManager current = shared;
         if (current == null) {
             synchronized (FFmpegManager.class) {
                 current = shared;
                 if (current == null) {
-                    current = new FFmpegManager(Path.of("."));
+                    current = new FFmpegManager();
                     shared = current;
                 }
             }
