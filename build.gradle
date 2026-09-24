@@ -119,6 +119,7 @@ java {
 tasks.named('test', Test) {
     useJUnitPlatform()
     systemProperty 'streamable.hardwareTests', System.getProperty('streamable.hardwareTests', 'false')
+    systemProperty 'streamable.benchmarks', System.getProperty('streamable.benchmarks', 'false')
     timeout = java.time.Duration.ofMinutes(10)
     testLogging {
         events 'passed', 'skipped', 'failed'
