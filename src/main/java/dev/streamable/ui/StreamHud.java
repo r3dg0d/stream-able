@@ -41,6 +41,7 @@ public final class StreamHud {
 
     private static final int PAD = 5;
     private static final int MARGIN = 6;
+    private static final int DEFAULT_Y = 34;
 
     /** Last drawn bounds in GUI pixels, for dragging in the canvas editor. */
     private static volatile int[] lastBounds = new int[4];
@@ -106,9 +107,11 @@ public final class StreamHud {
         int freeW = Math.max(0, graphics.guiWidth() - sw - 2 * MARGIN);
         int freeH = Math.max(0, graphics.guiHeight() - sh - 2 * MARGIN);
         float fx = ui.streamHudX < 0 ? 0f : ui.streamHudX;
-        float fy = ui.streamHudY < 0 ? 0f : ui.streamHudY;
+        float fy = Math.max(0f, ui.streamHudY);
         int x = MARGIN + Math.round(freeW * fx);
-        int y = MARGIN + Math.round(freeH * fy);
+        // Unplaced, it sits just below the canvas editor's button row, so it
+        // never covers those buttons when the editor is open.
+        int y = ui.streamHudY < 0 ? Math.min(DEFAULT_Y, MARGIN + freeH) : MARGIN + Math.round(freeH * fy);
         lastBounds = new int[]{x, y, sw, sh};
 
         graphics.pose().pushMatrix();
