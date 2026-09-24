@@ -124,6 +124,8 @@ public final class StreamTestSession {
         return SecretRedactor.redact(text, destination.credentials().streamKey());
     }
 
+    private volatile String connectivityProblem;
+
     private void run() {
         try {
             message = "Checking the destination...";
@@ -142,8 +144,14 @@ public final class StreamTestSession {
             if (checks.stream().anyMatch(c -> c.status() == NetworkProbe.Status.FAILED)) {
                 NetworkProbe.Check failed = checks.stream().filter(c -> c.status() == NetworkProbe.Status.FAILED)
                         .findFirst().orElseThrow();
-                fail(failed.name() + " failed: " + redact(failed.detail()));
-                return;
+                String problem = failed.name() + " failed: " + redact(failed.detail());
+                if (plan.mode() == StreamTestPlan.Mode.SERVICE_BANDWIDTH_TEST) {
+                    fail(problem);   // nothing to measure without the service
+                    return;
+                }
+                // The local encoder test does not need the server, so it still
+                // runs; the connectivity problem is reported alongside it.
+                connectivityProblem = problem;
             }
             runEncode();
         } catch (RuntimeException | IOException e) {
@@ -231,9 +239,11 @@ public final class StreamTestSession {
         FFmpegProgress last = ffmpeg.progress();
         publishMetrics(elapsed, last, "Completed", maxPressure);
         ffmpeg.stop();
-        metrics = withFindings(metrics, true);
+        // Only the service test mode actually measures upload bandwidth.
+        metrics = withFindings(metrics, plan.mode() == StreamTestPlan.Mode.SERVICE_BANDWIDTH_TEST, connectivityProblem);
         state = State.COMPLETE;
-        message = "Test complete.";
+        message = connectivityProblem == null ? "Test complete."
+                : "The local encoder test finished, but the server could not be reached.";
     }
 
     private void sleepUntilNextFrame(FramePacer pacer, long start) {
@@ -279,7 +289,18 @@ public final class StreamTestSession {
 
     /** Plain-language interpretation of the numbers. */
     static StreamTestMetrics withFindings(StreamTestMetrics m, boolean serviceMeasured) {
+        return withFindings(m, serviceMeasured, null);
+    }
+
+    /**
+     * @param connectivityProblem why the ingest could not be reached, or {@code null}; reported first
+     *                            so a clean encoder result is never mistaken for a working destination
+     */
+    static StreamTestMetrics withFindings(StreamTestMetrics m, boolean serviceMeasured, String connectivityProblem) {
         List<String> findings = new ArrayList<>();
+        if (connectivityProblem != null) {
+            findings.add(connectivityProblem + " Going live to this destination would fail until that is fixed.");
+        }
         if (m.encoderFps() > 0 && m.encoderFps() < m.targetFps() * 0.95) {
             findings.add(String.format(Locale.ROOT, "Encoder cannot maintain %d FPS (reached %.1f). Try a hardware "
                     + "encoder, a faster preset, a lower resolution or a lower frame rate.", m.targetFps(), m.encoderFps()));
@@ -301,7 +322,7 @@ public final class StreamTestSession {
         if (m.encodeLatencyMillis() > 150) {
             findings.add(String.format(Locale.ROOT, "Average encode latency is high (%.0f ms).", m.encodeLatencyMillis()));
         }
-        if (findings.isEmpty()) {
+        if (findings.isEmpty() || (connectivityProblem != null && findings.size() == 1)) {
             findings.add(String.format(Locale.ROOT, "Your settings held %d FPS at %d kbps without drops.",
                     m.targetFps(), m.targetKbps()));
         }

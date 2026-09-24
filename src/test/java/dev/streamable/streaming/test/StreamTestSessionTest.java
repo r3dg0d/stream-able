@@ -190,4 +190,14 @@ class StreamTestSessionTest {
                 List.of(), List.of());
         assertTrue(StreamTestSession.withFindings(good, true).findings().getFirst().startsWith("Your settings held"));
     }
+
+    @Test
+    void unreachableServerIsReportedFirstEvenWhenTheEncoderWasFine() {
+        StreamTestMetrics good = new StreamTestMetrics(6160, 6100, 6150, 60, 60, 20, 1.0, 0, 0.05, 0, 20, "",
+                List.of(), List.of());
+        List<String> findings = StreamTestSession.withFindings(good, false, "TCP failed: connection refused.").findings();
+        assertTrue(findings.getFirst().startsWith("TCP failed"), findings.toString());
+        assertTrue(findings.getFirst().contains("would fail"), findings.toString());
+        assertTrue(findings.get(1).startsWith("Your settings held"), findings.toString());
+    }
 }
