@@ -108,41 +108,41 @@ public final class PlatformUtils {
      * </ol>
      */
     private static boolean isAndroidEnvironment(String osName, String osArch) {
-        StreamAbleLog.CORE.info("[AndroidDetect] === Android Detection Start ===");
-        StreamAbleLog.CORE.info("[AndroidDetect] os.name={}", System.getProperty("os.name", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] os.arch={}", System.getProperty("os.arch", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] java.vm.name={}", System.getProperty("java.vm.name", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] java.vm.vendor={}", System.getProperty("java.vm.vendor", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] java.vendor={}", System.getProperty("java.vendor", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] java.home={}", System.getProperty("java.home", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] user.dir={}", System.getProperty("user.dir", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] user.home={}", System.getProperty("user.home", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] java.runtime.name={}", System.getProperty("java.runtime.name", "?"));
-        StreamAbleLog.CORE.info("[AndroidDetect] ANDROID_DATA={}", System.getenv("ANDROID_DATA"));
-        StreamAbleLog.CORE.info("[AndroidDetect] ANDROID_ROOT={}", System.getenv("ANDROID_ROOT"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] === Android Detection Start ===");
+        StreamAbleLog.CORE.debug("[AndroidDetect] os.name={}", System.getProperty("os.name", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] os.arch={}", System.getProperty("os.arch", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] java.vm.name={}", System.getProperty("java.vm.name", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] java.vm.vendor={}", System.getProperty("java.vm.vendor", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] java.vendor={}", System.getProperty("java.vendor", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] java.home={}", System.getProperty("java.home", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] user.dir={}", System.getProperty("user.dir", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] user.home={}", System.getProperty("user.home", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] java.runtime.name={}", System.getProperty("java.runtime.name", "?"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] ANDROID_DATA={}", System.getenv("ANDROID_DATA"));
+        StreamAbleLog.CORE.debug("[AndroidDetect] ANDROID_ROOT={}", System.getenv("ANDROID_ROOT"));
 
         String vmName = System.getProperty("java.vm.name", "").toLowerCase(Locale.ROOT);
         if (vmName.contains("dalvik") || vmName.contains("art")) {
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via java.vm.name: {}", vmName);
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via java.vm.name: {}", vmName);
             return true;
         }
 
         String vendor = System.getProperty("java.vendor", "").toLowerCase(Locale.ROOT);
         String vmVendor = System.getProperty("java.vm.vendor", "").toLowerCase(Locale.ROOT);
         if (vendor.contains("android") || vmVendor.contains("android")) {
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via vendor: java.vendor={}, java.vm.vendor={}", vendor, vmVendor);
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via vendor: java.vendor={}, java.vm.vendor={}", vendor, vmVendor);
             return true;
         }
 
         String androidData = System.getenv("ANDROID_DATA");
         String androidRoot = System.getenv("ANDROID_ROOT");
         if ((androidData != null && !androidData.isEmpty()) || (androidRoot != null && !androidRoot.isEmpty())) {
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via env: ANDROID_DATA={}, ANDROID_ROOT={}", androidData, androidRoot);
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via env: ANDROID_DATA={}, ANDROID_ROOT={}", androidData, androidRoot);
             return true;
         }
 
         if (Files.exists(Path.of("/system/build.prop"))) {
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via /system/build.prop");
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via /system/build.prop");
             return true;
         }
 
@@ -164,7 +164,7 @@ public final class PlatformUtils {
         };
         for (String launcherPath : launcherPaths) {
             if (Files.exists(Path.of(launcherPath))) {
-                StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via launcher path: {}", launcherPath);
+                StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via launcher path: {}", launcherPath);
                 return true;
             }
         }
@@ -175,7 +175,7 @@ public final class PlatformUtils {
             if (Files.exists(Path.of("/data/data")) ||
                 Files.exists(Path.of("/sdcard")) ||
                 Files.exists(Path.of("/storage/emulated"))) {
-                StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via Linux+ARM + Android paths");
+                StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via Linux+ARM + Android paths");
                 return true;
             }
         }
@@ -184,19 +184,19 @@ public final class PlatformUtils {
         String javaHome = System.getProperty("java.home", "");
         if (userDir.startsWith("/data/data/") || userDir.startsWith("/data/user/") ||
             javaHome.startsWith("/data/data/") || javaHome.startsWith("/data/user/")) {
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via working directory inside /data/: userDir={}, javaHome={}", userDir, javaHome);
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via working directory inside /data/: userDir={}, javaHome={}", userDir, javaHome);
             return true;
         }
 
         try {
             Class.forName("android.os.Build");
-            StreamAbleLog.CORE.info("[AndroidDetect] ✓ Detected via android.os.Build class");
+            StreamAbleLog.CORE.debug("[AndroidDetect] ✓ Detected via android.os.Build class");
             return true;
         } catch (ClassNotFoundException ignored) {
         }
 
-        StreamAbleLog.CORE.info("[AndroidDetect] ✗ Not detected as Android");
-        StreamAbleLog.CORE.info("[AndroidDetect] === Android Detection End ===");
+        StreamAbleLog.CORE.debug("[AndroidDetect] ✗ Not detected as Android");
+        StreamAbleLog.CORE.debug("[AndroidDetect] === Android Detection End ===");
         return false;
     }
 
