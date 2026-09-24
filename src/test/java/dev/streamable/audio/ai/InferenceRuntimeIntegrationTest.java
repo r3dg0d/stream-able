@@ -32,6 +32,27 @@ class InferenceRuntimeIntegrationTest {
     @TempDir
     Path root;
 
+    private String previousNativePath;
+
+    @org.junit.jupiter.api.BeforeEach
+    void rememberNativePath() {
+        previousNativePath = System.getProperty("onnxruntime.native.path");
+    }
+
+    /**
+     * The runtime points ONNX Runtime's JVM-wide native path at its install
+     * directory, which is this test's temporary directory. Restore it so tests
+     * that load ONNX Runtime from the test classpath afterwards are unaffected.
+     */
+    @org.junit.jupiter.api.AfterEach
+    void restoreNativePath() {
+        if (previousNativePath == null) {
+            System.clearProperty("onnxruntime.native.path");
+        } else {
+            System.setProperty("onnxruntime.native.path", previousNativePath);
+        }
+    }
+
     @Test
     void realRuntimeLoadsInIsolationAndProcessesAudio() throws Exception {
         String env = System.getenv("STREAMABLE_MODEL_DIR");
