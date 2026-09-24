@@ -389,6 +389,11 @@ public final class StreamAbleClient {
         if (previous instanceof dev.streamable.ui.StreamAbleScreen || !config.video.hideStudioFromOutputs) {
             return;
         }
+        if (!sources.snapshot().isEmpty() || video.isActive()) {
+            // The per-frame snapshot is current and clean; the framebuffer now
+            // also holds locally drawn sources, so it must not be copied.
+            return;
+        }
         try {
             compositor.snapshotGame();
         } catch (RuntimeException e) {
@@ -443,6 +448,12 @@ public final class StreamAbleClient {
         }
         try {
             boolean frozen = config.video.hideStudioFromOutputs && ownScreen && compositor.hasGameSnapshot();
+            if (!frozen) {
+                // Keep a clean copy of the game frame - taken before the local
+                // overlay below draws sources onto the screen - for the moment
+                // a Stream-able screen opens and outputs freeze on it.
+                compositor.snapshotGame();
+            }
             video.onFrame(sources, browsers, config.video.canvas(), config.video.gameScaling, frozen,
                     source -> source.routing().includeInRecording(),
                     source -> source.routing().includeInStream(),
@@ -479,6 +490,11 @@ public final class StreamAbleClient {
     }
 
     private void renderLocalOverlay(Minecraft client, boolean editing) {
+        if (client.screen != null && !editing) {
+            // Sources belong over gameplay (and in the canvas editor), never
+            // over a menu or the Studio.
+            return;
+        }
         int framebufferWidth = client.getWindow().getWidth();
         int framebufferHeight = client.getWindow().getHeight();
         if (framebufferWidth <= 0 || framebufferHeight <= 0) {
@@ -489,9 +505,8 @@ public final class StreamAbleClient {
         if (editing) {
             // Editor chrome is local-only: it is drawn after the output frame
             // has already been composed and submitted.
-            EditorOverlayRenderer.render(compositor.quadRenderer(), editor,
-                    new ProgramCanvas(canvas).mappingTo(framebufferWidth, framebufferHeight),
-                    framebufferWidth, framebufferHeight);
+            compositor.drawOnScreen((w, h) -> EditorOverlayRenderer.render(compositor.quadRenderer(), editor,
+                    new ProgramCanvas(canvas).mappingTo(w, h), w, h));
         }
     }
 

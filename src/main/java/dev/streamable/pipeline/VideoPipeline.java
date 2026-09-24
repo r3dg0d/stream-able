@@ -114,7 +114,8 @@ public final class VideoPipeline implements AutoCloseable {
      *
      * @param canvas            the program canvas size
      * @param gameScaling       how the game frame fills the canvas
-     * @param frozen            use the game snapshot (a Stream-able screen is open)
+     * @param frozen            use the game snapshot (a Stream-able screen is open); the caller keeps
+     *                          the snapshot current, taken before any local overlay is drawn
      * @param includeRecording  routing filter for the recording canvas
      * @param includeStream     routing filter for the stream canvas
      * @param routingsDiffer    whether any visible source is routed differently to the two outputs
@@ -134,9 +135,6 @@ public final class VideoPipeline implements AutoCloseable {
         boolean separate = routingsDiffer && recording != null && streaming != null;
         if (!compositor.ensureCanvas(canvas, separate)) {
             return;
-        }
-        if (!frozen) {
-            compositor.snapshotGame();
         }
 
         int recordingDue = recording == null ? 0 : recording.pacer.framesDue(now);

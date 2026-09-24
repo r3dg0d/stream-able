@@ -55,6 +55,8 @@ public final class ProgramCompositor implements AutoCloseable {
     private ProgramTarget gameSnapshot;
     private boolean snapshotValid;
     private boolean broken;
+    private int screenFbo;
+    private int screenFboTexture;
 
     /** Chromium delivers premultiplied alpha; overridable if a CEF build differs. */
     private boolean premultipliedBrowserAlpha = true;
@@ -291,17 +293,83 @@ public final class ProgramCompositor implements AutoCloseable {
     /**
      * Draws the locally visible sources straight onto the screen.
      *
-     * <p>Called at the end of the frame with Minecraft's own framebuffer bound,
-     * so this is what the player sees. Sources whose routing excludes local
+     * <p>Called at the end of the frame; draws into Minecraft's main render
+     * target, which is what the player sees. Sources whose routing excludes local
      * display are skipped here but still reach the program canvas.</p>
      */
     public void renderToScreen(SourceList sources, BrowserSourceManager browsers, Resolution canvas,
                                int screenWidth, int screenHeight) {
+        drawOnScreen((width, height) -> drawSources(sources, browsers, s -> s.routing().showLocally(), width, height,
+                new ProgramCanvas(canvas).mappingTo(width, height)));
+    }
+
+    /** Receives the main target's size while it is bound for drawing. */
+    public interface ScreenDraw {
+        void draw(int width, int height);
+    }
+
+    /**
+     * Runs GL drawing against Minecraft's main render target. Whatever
+     * framebuffer happens to be bound at the end of the frame is not the one
+     * shown - the main target is blitted to the window afterwards - so local
+     * overlays bind it explicitly.
+     */
+    public void drawOnScreen(ScreenDraw draw) {
         if (broken || !quadRenderer.initialise()) {
             return;
         }
-        ProgramCanvas.Mapping mapping = new ProgramCanvas(canvas).mappingTo(screenWidth, screenHeight);
-        drawSources(sources, browsers, s -> s.routing().showLocally(), screenWidth, screenHeight, mapping);
+        GameTexture game = gameTexture();
+        if (game == null) {
+            return;
+        }
+        int fbo = screenFramebuffer(game.id());
+        if (fbo == 0) {
+            return;
+        }
+        int width = game.size().width();
+        int height = game.size().height();
+        int prevFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        int[] prevViewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, prevViewport);
+        try {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+            GL11.glViewport(0, 0, width, height);
+            draw.draw(width, height);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFramebuffer);
+            GL11.glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+        }
+    }
+
+    /** A framebuffer around the main target's colour texture, recreated when the window resizes. */
+    private int screenFramebuffer(int colorTexture) {
+        if (screenFbo != 0 && screenFboTexture == colorTexture) {
+            return screenFbo;
+        }
+        deleteScreenFramebuffer();
+        int fbo = GL30.glGenFramebuffers();
+        int prev = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
+        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, colorTexture, 0);
+        int status = GL30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
+        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prev);
+        if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
+            GL30.glDeleteFramebuffers(fbo);
+            StreamAbleLog.COMPOSITOR.warn("Could not attach to the game framebuffer (status 0x{}); "
+                    + "sources will not be shown locally.", Integer.toHexString(status));
+            return 0;
+        }
+        screenFbo = fbo;
+        screenFboTexture = colorTexture;
+        return fbo;
+    }
+
+    private void deleteScreenFramebuffer() {
+        if (screenFbo != 0) {
+            GL30.glDeleteFramebuffers(screenFbo);
+            screenFbo = 0;
+            screenFboTexture = 0;
+        }
     }
 
     /** Texture of a composed canvas, for output capture. */
@@ -330,6 +398,7 @@ public final class ProgramCompositor implements AutoCloseable {
     @Override
     public void close() {
         closeTargets();
+        deleteScreenFramebuffer();
         if (gameSnapshot != null) {
             gameSnapshot.close();
             gameSnapshot = null;

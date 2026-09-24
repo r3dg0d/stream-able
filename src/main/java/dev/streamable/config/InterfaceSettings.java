@@ -10,7 +10,7 @@ public final class InterfaceSettings {
     public int streamHudPosition = 1;
     public float streamHudScale = 1.0f;
     public float streamHudOpacity = 0.85f;
-    /** HUD position as a fraction of the free screen area; negative means the default top-right corner. */
+    /** HUD position as a fraction of the free screen area; negative means the default top-left corner, clear of toasts. */
     public float streamHudX = -1;
     public float streamHudY = -1;
 

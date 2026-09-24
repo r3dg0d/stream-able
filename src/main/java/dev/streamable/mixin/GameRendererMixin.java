@@ -38,5 +38,11 @@ public abstract class GameRendererMixin {
         } catch (Throwable t) {
             StreamAbleLog.COMPOSITOR.warn("Stream-able frame hook failed; skipping this frame.", t);
         }
+        // After capture, so the stream HUD reaches the player's screen only.
+        try {
+            dev.streamable.ui.StreamHud.renderAfterCapture((GameRenderer) (Object) this);
+        } catch (Throwable t) {
+            StreamAbleLog.CORE.warn("Stream HUD failed to draw; skipping this frame.", t);
+        }
     }
 }

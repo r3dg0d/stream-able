@@ -9,10 +9,14 @@ import dev.streamable.ui.kit.Painter;
 import dev.streamable.ui.kit.Theme;
 import dev.streamable.ui.kit.Widgets;
 import dev.streamable.ui.studio.Studio;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElement;
-import net.minecraft.client.DeltaTracker;
+import com.mojang.blaze3d.platform.Window;
+import dev.streamable.mixin.GameRendererAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.render.GuiRenderer;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.fog.FogRenderer;
+import net.minecraft.client.renderer.state.gui.GuiRenderState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,13 +28,16 @@ import java.util.Locale;
  * the network condition. Detailed mode adds the encoder, each destination and
  * a microphone meter.
  *
- * <p>It is a HUD element, not a source: it is drawn after the program frame is
- * captured and never reaches recordings or streams. It is movable - drag it in
- * the canvas editor, where it is always shown so it can be placed - and its
+ * <p>It never reaches recordings or streams. Minecraft's own HUD is drawn
+ * before Stream-able captures the frame, so a normal HUD element would be
+ * captured too; instead this panel is drawn in a second, HUD-only GUI pass
+ * after capture, on the player's screen only. It is movable - drag it in the
+ * canvas editor, where it is always shown so it can be placed - and its
  * position is saved as a fraction of the screen, so it stays put across window
- * sizes, including ultrawide.</p>
+ * sizes, including ultrawide. By default it sits top-left, clear of the game's
+ * toasts.</p>
  */
-public final class StreamHud implements HudElement {
+public final class StreamHud {
 
     private static final int PAD = 5;
     private static final int MARGIN = 6;
@@ -38,14 +45,23 @@ public final class StreamHud implements HudElement {
     /** Last drawn bounds in GUI pixels, for dragging in the canvas editor. */
     private static volatile int[] lastBounds = new int[4];
 
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        StreamAbleClient client = StreamAbleClient.get();
+    private StreamHud() {
+    }
+
+    /**
+     * Draws the HUD over the finished frame. Called from the end of the game's
+     * render pass, after the program frame has been captured. Hidden while any
+     * other screen is open (except the canvas editor, where it can be dragged)
+     * and when the GUI is hidden with F1.
+     */
+    public static void renderAfterCapture(GameRenderer gameRenderer) {
         Minecraft mc = Minecraft.getInstance();
-        if (client == null) {
+        StreamAbleClient client = StreamAbleClient.get();
+        boolean editing = mc.screen instanceof SourceEditorScreen;
+        if (client == null || mc.player == null || mc.options.hideGui || (mc.screen != null && !editing)) {
+            lastBounds = new int[4];
             return;
         }
-        boolean editing = mc.screen instanceof SourceEditorScreen;
         InterfaceSettings ui = client.config().ui;
         StreamHealth health = client.health();
         boolean recording = client.recording().isActive();
@@ -53,6 +69,27 @@ public final class StreamHud implements HudElement {
             lastBounds = new int[4];
             return;
         }
+        GuiRenderState state = gameRenderer.getGameRenderState().guiRenderState;
+        state.reset();   // the frame's own GUI has already been drawn
+        Window window = mc.getWindow();
+        GuiGraphicsExtractor graphics = new GuiGraphicsExtractor(mc, state,
+                (int) mc.mouseHandler.getScaledXPos(window), (int) mc.mouseHandler.getScaledYPos(window));
+        extract(graphics, client, health, recording, editing);
+
+        GameRendererAccessor access = (GameRendererAccessor) gameRenderer;
+        access.streamable$setUseUiLightmap(true);
+        try {
+            GuiRenderer renderer = access.streamable$guiRenderer();
+            renderer.render(access.streamable$fogRenderer().getBuffer(FogRenderer.FogMode.NONE));
+            renderer.endFrame();
+        } finally {
+            access.streamable$setUseUiLightmap(false);
+        }
+    }
+
+    private static void extract(GuiGraphicsExtractor graphics, StreamAbleClient client, StreamHealth health,
+                                boolean recording, boolean editing) {
+        InterfaceSettings ui = client.config().ui;
         Painter p = new Painter(graphics, -1, -1, 0);
         List<Row> rows = rows(client, health, recording, ui.detailedStreamHud, editing);
 
@@ -68,7 +105,7 @@ public final class StreamHud implements HudElement {
         int sh = Math.round(h * scale);
         int freeW = Math.max(0, graphics.guiWidth() - sw - 2 * MARGIN);
         int freeH = Math.max(0, graphics.guiHeight() - sh - 2 * MARGIN);
-        float fx = ui.streamHudX < 0 ? 1f : ui.streamHudX;
+        float fx = ui.streamHudX < 0 ? 0f : ui.streamHudX;
         float fy = ui.streamHudY < 0 ? 0f : ui.streamHudY;
         int x = MARGIN + Math.round(freeW * fx);
         int y = MARGIN + Math.round(freeH * fy);

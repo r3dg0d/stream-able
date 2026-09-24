@@ -1,13 +1,11 @@
 package dev.streamable;
 
 import dev.streamable.ui.SourceEditorScreen;
-import dev.streamable.ui.StreamHud;
 import dev.streamable.ui.studio.StudioScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
@@ -47,8 +45,6 @@ public final class StreamAble implements ClientModInitializer {
         runtime.initialise();
 
         registerKeyBindings();
-        HudElementRegistry.addLast(
-                Identifier.fromNamespaceAndPath(MOD_ID, "stream_health"), new StreamHud());
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
