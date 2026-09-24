@@ -22,6 +22,40 @@ public final class RecordingSettings {
         Container(String extension) {
             this.extension = extension;
         }
+
+        /** Whether FFmpeg's muxer for this container accepts the video codec (measured with FFmpeg 8.1). */
+        public boolean supports(VideoEncoder.Codec codec) {
+            return switch (this) {
+                case MP4, MKV -> true;
+                case MOV -> codec == VideoEncoder.Codec.H264 || codec == VideoEncoder.Codec.HEVC;
+                case WEBM -> codec == VideoEncoder.Codec.VP9 || codec == VideoEncoder.Codec.AV1;
+            };
+        }
+
+        /** Whether FFmpeg's muxer for this container accepts the audio codec (measured with FFmpeg 8.1). */
+        public boolean supports(AudioCodec codec) {
+            return switch (this) {
+                case MP4, MKV -> true;
+                case MOV -> codec == AudioCodec.AAC || codec == AudioCodec.PCM;
+                case WEBM -> codec == AudioCodec.OPUS;
+            };
+        }
+
+        /**
+         * Why this container cannot hold the codecs, or {@code null} when it can.
+         * Checked before recording starts, since the muxer would otherwise fail.
+         */
+        public String problemWith(VideoEncoder encoder, AudioCodec audio) {
+            if (encoder != null && !supports(encoder.codec())) {
+                return name() + " cannot hold " + encoder.codec().name() + " video; choose MKV or MP4, "
+                        + "or a different encoder.";
+            }
+            if (audio != null && !supports(audio)) {
+                return name() + " cannot hold " + audio.name() + " audio; choose MKV or MP4, or a different "
+                        + "audio codec.";
+            }
+            return null;
+        }
     }
 
     public boolean enabled = true;
@@ -32,7 +66,8 @@ public final class RecordingSettings {
     public int fps = 60;
     public int width = 1920;
     public int height = 1080;
-    public String encoder = VideoEncoder.X264.ffmpegName();
+    /** Empty means auto-detect: the best encoder that passed its test encode, hardware first. */
+    public String encoder = "";
     public RateControl rateControl = RateControl.CONSTANT_QUALITY;
     public int bitrateKbps = 20_000;
     /** 0 = fastest/lowest quality, 100 = slowest/highest. Maps to encoder presets. */
@@ -106,8 +141,8 @@ public final class RecordingSettings {
         if (rateControl == null) {
             rateControl = RateControl.CONSTANT_QUALITY;
         }
-        if (encoder == null || encoder.isBlank()) {
-            encoder = VideoEncoder.X264.ffmpegName();
+        if (encoder == null) {
+            encoder = "";   // auto-detect
         }
         if (outputDirectory == null) {
             outputDirectory = "";

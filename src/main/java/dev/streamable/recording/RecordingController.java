@@ -150,6 +150,9 @@ public final class RecordingController {
         VideoEncoder encoder = probe.resolve(settings.encoder, false);
         String invalid = OutputValidation.firstError(
                 OutputValidation.validate(output, settings.fps, encoder, OutputValidation.Target.RECORDING));
+        if (invalid == null) {
+            invalid = settings.container.problemWith(encoder, settings.audioCodec);
+        }
         if (invalid != null) {
             lastError = invalid;
             return invalid;
