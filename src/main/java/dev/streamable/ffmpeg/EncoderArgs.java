@@ -18,6 +18,14 @@ public final class EncoderArgs {
     /** Colour conversion to BT.709 limited range, the standard for HD and above. */
     static final String BT709_CONVERSION = "scale=out_color_matrix=bt709:out_range=tv";
 
+    /**
+     * Stamps the converted frames as BT.709. FFmpeg 8 encoders take colour
+     * properties from the frames, so the output options alone left primaries
+     * and transfer "unspecified" in the file (measured with the pinned build);
+     * players then guess, and some guess wrong.
+     */
+    static final String BT709_TAGS = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv";
+
     private EncoderArgs() {
     }
 
@@ -32,9 +40,9 @@ public final class EncoderArgs {
     /** Filter chain tail that converts RGB frames into what the encoder accepts. */
     public static String formatFilter(VideoEncoder encoder) {
         return switch (encoder.family()) {
-            case VAAPI -> BT709_CONVERSION + ",format=nv12,hwupload";
-            case INTEL -> BT709_CONVERSION + ",format=nv12";
-            default -> BT709_CONVERSION + ",format=yuv420p";
+            case VAAPI -> BT709_CONVERSION + ",format=nv12," + BT709_TAGS + ",hwupload";
+            case INTEL -> BT709_CONVERSION + ",format=nv12," + BT709_TAGS;
+            default -> BT709_CONVERSION + ",format=yuv420p," + BT709_TAGS;
         };
     }
 

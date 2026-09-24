@@ -189,6 +189,17 @@ class FFmpegCommandBuilderTest {
     }
 
     @Test
+    void framesAreTaggedBt709SoTheFileCarriesPrimariesAndTransfer() {
+        for (VideoEncoder encoder : List.of(VideoEncoder.X264, VideoEncoder.NVENC_H264, VideoEncoder.QSV_H264)) {
+            String filter = EncoderArgs.formatFilter(encoder);
+            assertTrue(filter.endsWith(EncoderArgs.BT709_TAGS), encoder + ": " + filter);
+        }
+        String vaapi = EncoderArgs.formatFilter(VideoEncoder.VAAPI_H264);
+        assertTrue(vaapi.indexOf(EncoderArgs.BT709_TAGS) < vaapi.indexOf("hwupload"),
+                "tags must be set on system-memory frames before upload: " + vaapi);
+    }
+
+    @Test
     void ultrawideOutputIsNeverForcedTo16by9() {
         EncodeProfile profile = new EncodeProfile(
                 VideoProfile.liveDefault(VideoEncoder.X264, 3440, 1440, 60, 12000), AudioProfile.LIVE_DEFAULT);
@@ -215,7 +226,8 @@ class FFmpegCommandBuilderTest {
                 FFMPEG, profile, 1920, 1080, List.of("rtmp://a/k"), 0, 0);
         assertTrue(valueAfter(args, "-vaapi_device").startsWith("/dev/dri/renderD"));
         assertTrue(indexOf(args, "-vaapi_device") < indexOf(args, "-i"), "device args precede inputs");
-        assertTrue(valueAfter(args, "-vf").endsWith("format=nv12,hwupload"));
+        String filter = valueAfter(args, "-vf");
+        assertTrue(filter.contains("format=nv12,") && filter.endsWith(",hwupload"), filter);
     }
 
     @Test
