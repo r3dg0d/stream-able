@@ -3,12 +3,10 @@ package dev.streamable.source;
 /**
  * Where a browser source's audio should be heard.
  *
- * <p>Mirrors OBS's audio monitoring options. See
- * {@code dev.streamable.browser.audio.BrowserAudioBridge} for the current
- * capability status - on the JCEF build Stream-able targets, Chromium audio
- * cannot be intercepted, so these settings are persisted and surfaced but only
- * {@link #MONITOR_ONLY} is actually achievable without an explicit system
- * loopback capture device.</p>
+ * <p>Mirrors OBS's audio monitoring options. "Stream" means the program mix,
+ * so it reaches recordings and clips as well as the broadcast. Implemented by
+ * the in-page audio tap; see {@code dev.streamable.browser.audio.BrowserAudioBridge}
+ * for what it can and cannot capture.</p>
  */
 public enum BrowserAudioMode {
     /** Muted everywhere. */
@@ -16,9 +14,9 @@ public enum BrowserAudioMode {
     /** The player hears it locally; viewers do not. */
     MONITOR_ONLY("Monitor Only"),
     /** Mixed into the broadcast only; the player does not hear it. */
-    STREAM_ONLY("Stream Only"),
+    STREAM_ONLY("Recording & stream only"),
     /** Both. */
-    MONITOR_AND_STREAM("Monitor + Stream");
+    MONITOR_AND_STREAM("Monitor + recording & stream");
 
     private final String displayName;
 

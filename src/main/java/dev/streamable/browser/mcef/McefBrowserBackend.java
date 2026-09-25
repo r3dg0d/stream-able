@@ -14,8 +14,6 @@ import org.cef.handler.CefLoadHandlerAdapter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -39,13 +37,13 @@ public final class McefBrowserBackend implements BrowserBackend {
     /** Loaded once from the mod jar; see the file for what it does and why. */
     private static final String INPUT_SHIM = loadInputShim();
 
-    private final Map<Integer, McefBrowserHandle> handlesByBrowserId = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<McefBrowserHandle> handles = new CopyOnWriteArrayList<>();
 
     private volatile MCEFApi api;
     private volatile BrowserEngineStatus status =
             BrowserEngineStatus.initialising("Not started", -1);
     private volatile boolean loadHandlerRegistered;
+    private volatile org.cef.browser.CefMessageRouter audioRouter;
     private volatile boolean closed;
 
     private static String loadInputShim() {
@@ -142,22 +140,56 @@ public final class McefBrowserBackend implements BrowserBackend {
             throw new IllegalStateException("Browser engine is not ready");
         }
         String target = url == null || url.isBlank() ? "about:blank" : url.trim();
+        if (!loadHandlerRegistered) {
+            registerHandlersBeforeFirstBrowser(current);
+        }
 
         // transparent = true is the first requirement for an overlay that does
         // not paint an opaque rectangle over the game; the CSS injection and the
         // compositor's premultiplied blending are the other two.
-        MCEFBrowser browser = current.createBrowser(target, true);
+        // Created blank: the handle navigates to the real URL once the audio
+        // tap is registered to run before the page's own scripts.
+        MCEFBrowser browser = current.createBrowser("about:blank", true);
         browser.resize(Math.max(1, width), Math.max(1, height));
 
         McefBrowserHandle handle = new McefBrowserHandle(browser, target, width, height);
         handles.add(handle);
         try {
-            handlesByBrowserId.put(browser.getCefBrowser().getIdentifier(), handle);
             registerLoadHandlerOnce(browser.getCefBrowser());
         } catch (RuntimeException e) {
             StreamAbleLog.BROWSER.warn("Could not attach load handler; CSS will be applied on demand only", e);
         }
         return handle;
+    }
+
+    /**
+     * Registers the load handler and the audio message router on MCEF's shared
+     * client before any real source exists.
+     *
+     * <p>JCEF decides which handlers a browser has - and which message routers
+     * its renderer process knows - when that browser is created, so handlers
+     * attached to the client afterwards never reach browsers that already
+     * exist. MCEF does not expose its client, so a throwaway blank browser is
+     * created to reach it, then closed; every source created afterwards gets
+     * the handlers.</p>
+     */
+    private void registerHandlersBeforeFirstBrowser(MCEFApi current) {
+        MCEFBrowser probe = null;
+        try {
+            probe = current.createBrowser("about:blank", true);
+            registerLoadHandlerOnce(probe.getCefBrowser());
+        } catch (RuntimeException e) {
+            StreamAbleLog.BROWSER.warn("Could not prepare browser handlers; CSS, input and audio injection "
+                    + "will be applied on demand only", e);
+        } finally {
+            if (probe != null) {
+                try {
+                    probe.close();
+                } catch (RuntimeException e) {
+                    StreamAbleLog.BROWSER.debug("Could not close the setup browser: {}", e.toString());
+                }
+            }
+        }
     }
 
     /**
@@ -175,13 +207,24 @@ public final class McefBrowserBackend implements BrowserBackend {
             if (loadHandlerRegistered) {
                 return;
             }
-            cefBrowser.getClient().addLoadHandler(new CefLoadHandlerAdapter() {
+            registerAudioRouter(cefBrowser);
+            installLoadHandler(cefBrowser.getClient(), new CefLoadHandlerAdapter() {
+                @Override
+                public void onLoadStart(CefBrowser browser, CefFrame frame,
+                                        org.cef.network.CefRequest.TransitionType transitionType) {
+                    // As early as possible, so the tap is in place before the
+                    // page creates its own audio; re-applied at load end.
+                    if (frame != null && frame.isMain()) {
+                        injectAudioTap(browser);
+                    }
+                }
+
                 @Override
                 public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
                     if (frame == null || !frame.isMain()) {
                         return;   // sub-frames inherit styling from the main document
                     }
-                    McefBrowserHandle handle = handlesByBrowserId.get(browser.getIdentifier());
+                    McefBrowserHandle handle = handleFor(browser);
                     if (handle == null || handle.isClosed()) {
                         return;
                     }
@@ -194,9 +237,11 @@ public final class McefBrowserBackend implements BrowserBackend {
                         if (!INPUT_SHIM.isEmpty()) {
                             browser.executeJavaScript(INPUT_SHIM, browser.getURL(), 0);
                         }
+                        injectAudioTap(browser);
                     } catch (RuntimeException e) {
                         StreamAbleLog.BROWSER.warn("Failed to inject browser source styling/shim", e);
                     }
+                    handle.onMainFrameLoaded();
                 }
             });
             loadHandlerRegistered = true;
@@ -204,11 +249,134 @@ public final class McefBrowserBackend implements BrowserBackend {
         }
     }
 
+    /**
+     * Installs our load handler on the shared client. JCEF keeps a single
+     * load-handler slot and silently ignores {@code addLoadHandler} when it is
+     * taken, so an existing handler is chained rather than replaced.
+     */
+    private static void installLoadHandler(org.cef.CefClient client, org.cef.handler.CefLoadHandler ours) {
+        org.cef.handler.CefLoadHandler previous = null;
+        try {
+            java.lang.reflect.Field field = org.cef.CefClient.class.getDeclaredField("loadHandler_");
+            field.setAccessible(true);
+            previous = (org.cef.handler.CefLoadHandler) field.get(client);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            StreamAbleLog.BROWSER.debug("Could not inspect the browser load handler: {}", e.toString());
+        }
+        if (previous == null) {
+            client.addLoadHandler(ours);
+            StreamAbleLog.BROWSER.info("Browser load handler installed.");
+            return;
+        }
+        org.cef.handler.CefLoadHandler existing = previous;
+        client.removeLoadHandler();
+        client.addLoadHandler(new org.cef.handler.CefLoadHandler() {
+            @Override
+            public void onLoadingStateChange(CefBrowser b, boolean loading, boolean back, boolean forward) {
+                existing.onLoadingStateChange(b, loading, back, forward);
+                ours.onLoadingStateChange(b, loading, back, forward);
+            }
+
+            @Override
+            public void onLoadStart(CefBrowser b, CefFrame f, org.cef.network.CefRequest.TransitionType t) {
+                existing.onLoadStart(b, f, t);
+                ours.onLoadStart(b, f, t);
+            }
+
+            @Override
+            public void onLoadEnd(CefBrowser b, CefFrame f, int status) {
+                existing.onLoadEnd(b, f, status);
+                ours.onLoadEnd(b, f, status);
+            }
+
+            @Override
+            public void onLoadError(CefBrowser b, CefFrame f, ErrorCode code, String text, String url) {
+                existing.onLoadError(b, f, code, text, url);
+                ours.onLoadError(b, f, code, text, url);
+            }
+        });
+        StreamAbleLog.BROWSER.info("Browser load handler chained after an existing one ({}).",
+                existing.getClass().getName());
+    }
+
+    private void injectAudioTap(CefBrowser browser) {
+        McefBrowserHandle handle = handleFor(browser);
+        if (handle == null || handle.isClosed()) {
+            return;
+        }
+        String script = handle.audioScript();
+        if (!script.isEmpty()) {
+            try {
+                browser.executeJavaScript(script, browser.getURL(), 0);
+            } catch (RuntimeException e) {
+                StreamAbleLog.BROWSER.debug("Could not inject the audio tap: {}", e.toString());
+            }
+        }
+    }
+
+    /**
+     * The page-to-Java channel for the audio tap: a JCEF message router, which
+     * defines {@code window.streamableAudioQuery} in every page. A client may
+     * hold several routers, so this does not disturb MCEF's own.
+     */
+    private void registerAudioRouter(CefBrowser cefBrowser) {
+        try {
+            org.cef.browser.CefMessageRouter router = org.cef.browser.CefMessageRouter.create(
+                    new org.cef.browser.CefMessageRouter.CefMessageRouterConfig(
+                            dev.streamable.browser.audio.BrowserAudioTap.QUERY_FUNCTION,
+                            dev.streamable.browser.audio.BrowserAudioTap.CANCEL_FUNCTION));
+            router.addHandler(new org.cef.handler.CefMessageRouterHandlerAdapter() {
+                @Override
+                public boolean onQuery(CefBrowser browser, CefFrame frame, long queryId, String request,
+                                       boolean persistent, org.cef.callback.CefQueryCallback callback) {
+                    var chunk = dev.streamable.browser.audio.BrowserAudioTap.parse(request);
+                    if (chunk == null) {
+                        return false;   // not ours
+                    }
+                    McefBrowserHandle handle = handleFor(browser);
+                    if (handle != null) {
+                        handle.deliverAudio(chunk);
+                    }
+                    callback.success("");
+                    return true;
+                }
+            }, true);
+            cefBrowser.getClient().addMessageRouter(router);
+            audioRouter = router;
+            StreamAbleLog.BROWSER.info("Browser audio tap ready: page audio can reach recordings and streams.");
+        } catch (RuntimeException | LinkageError e) {
+            StreamAbleLog.BROWSER.warn("Browser audio capture unavailable (message router failed): {}", e.toString());
+        }
+    }
+
+    public boolean audioCaptureReady() {
+        return audioRouter != null;
+    }
+
+    /**
+     * The handle for a browser in a CEF callback. Matched by object, falling
+     * back to the browser identifier: an off-screen browser's identifier is
+     * only assigned once its native side exists, so it cannot be used as a key
+     * at creation time (keying by it is why load-time injection used to find
+     * no handle).
+     */
+    private McefBrowserHandle handleFor(CefBrowser browser) {
+        if (browser == null) {
+            return null;
+        }
+        for (McefBrowserHandle handle : handles) {
+            CefBrowser own = handle.mcefBrowser().getCefBrowser();
+            if (own == browser || (own.getIdentifier() > 0 && own.getIdentifier() == browser.getIdentifier())) {
+                return handle;
+            }
+        }
+        return null;
+    }
+
     /** Forgets a handle that the manager has closed. */
     public void forget(BrowserHandle handle) {
         if (handle instanceof McefBrowserHandle mcef) {
             handles.remove(mcef);
-            handlesByBrowserId.values().remove(mcef);
         }
     }
 
@@ -227,7 +395,6 @@ public final class McefBrowserBackend implements BrowserBackend {
             }
         }
         handles.clear();
-        handlesByBrowserId.clear();
         // The CefApp itself is owned by MCEF, which disposes it on CLIENT_STOPPING.
     }
 }

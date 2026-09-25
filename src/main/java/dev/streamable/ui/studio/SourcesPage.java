@@ -303,9 +303,12 @@ final class SourcesPage {
             source.setShutdownWhenHidden(v);
             s.changed();
         }).tooltip("Frees memory while hidden; the page restarts when shown again."));
-        card.add(new Widgets.Notice(() -> BrowserAudioBridge.describeLimitation(source), () -> Theme.WARNING));
-        card.add(new Widgets.Notice(() -> BrowserAudioBridge.canCaptureBrowserAudio() ? null
-                : "Page audio plays on your speakers only. " + BrowserAudioBridge.limitationReason(), () -> Theme.INFO));
+        card.add(new Slider("Page volume", 0, 2, 0.01, source::audioVolume, v -> {
+            source.setAudioVolume((float) v);
+            s.changed();
+        }).format(v -> Math.round(v * 100) + "%").defaultValue(1)
+                .visibleWhen(() -> source.audioMode() != BrowserAudioMode.OFF));
+        card.add(new Widgets.Notice(() -> BrowserAudioBridge.describeLimitation(source), () -> Theme.INFO));
 
         Layouts.Row css = card.add(new Layouts.Row(Theme.SPACE_3));
         css.add(Button.of("Transparent background", () -> {
@@ -320,16 +323,9 @@ final class SourcesPage {
         css.add(Layouts.spacer(0), -1);
     }
 
-    /** Modes the embedded browser can actually honour, plus the source's current one. */
+    /** Every mode can be honoured by the in-page audio tap (see BrowserAudioBridge for its limits). */
     private static List<BrowserAudioMode> audioModes(BrowserSource source) {
-        List<BrowserAudioMode> modes = new ArrayList<>();
-        for (BrowserAudioMode mode : BrowserAudioMode.values()) {
-            boolean streams = mode == BrowserAudioMode.STREAM_ONLY || mode == BrowserAudioMode.MONITOR_AND_STREAM;
-            if (!streams || BrowserAudioBridge.canCaptureBrowserAudio() || mode == source.audioMode()) {
-                modes.add(mode);
-            }
-        }
-        return modes;
+        return List.of(BrowserAudioMode.values());
     }
 
     private static int indexOf(int[] values, int value) {

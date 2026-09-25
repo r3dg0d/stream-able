@@ -5,90 +5,85 @@ import dev.streamable.source.BrowserAudioMode;
 import dev.streamable.source.BrowserSource;
 
 /**
- * Browser-source audio capture - and an honest account of why it is limited.
+ * Browser-source audio capture, and an honest account of its limits.
  *
- * <h2>What was investigated</h2>
- * <p>CEF exposes {@code CefAudioHandler} ({@code OnAudioStreamPacket}), which is
- * exactly the clean callback needed: it delivers a browser's decoded PCM per
- * browser, without touching the operating system's mixer. Routing alert sounds
- * into the broadcast through it would be straightforward.</p>
- *
- * <p><b>That handler does not exist in the JCEF build Stream-able targets.</b>
- * The MCEF Modern release compatible with Minecraft 26.1
- * ({@code 0.3.3+mc26.1.jcef146.0.10}) bundles
- * {@code me.friwi:jcef-api} at {@code cef-146.0.10}, whose {@code org.cef.handler}
- * package contains no audio handler of any kind - only display, load, render,
- * keyboard, focus, lifespan, request and friends. There is therefore no Java
- * API to attach to, with or without a patched MCEF: the binding simply is not
- * present in the native bridge.</p>
+ * <h2>Why not the native route</h2>
+ * <p>CEF has {@code CefAudioHandler} ({@code OnAudioStreamPacket}), the clean
+ * per-browser PCM callback, but the JCEF build that MCEF Modern
+ * {@code 0.3.3+mc26.1.jcef146.0.10} bundles ({@code me.friwi:jcef-api} at
+ * {@code cef-146.0.10}) contains no audio handler of any kind, so there is no
+ * native API to attach to.</p>
  *
  * <h2>What Stream-able does instead</h2>
- * <ul>
- *   <li>Chromium keeps playing audio to the system output device, so the player
- *       <em>hears</em> alerts. That is {@link BrowserAudioMode#MONITOR_ONLY} and
- *       it works today with no extra configuration.</li>
- *   <li>Per-source audio settings are still stored and shown, so configurations
- *       survive until the capability lands.</li>
- *   <li>Getting browser audio into the broadcast requires capturing the system
- *       output. Stream-able does not do that silently - it would capture every
- *       sound on the machine, not just the overlay - so it is an explicit,
- *       clearly labelled opt-in described in the README.</li>
- * </ul>
+ * <p>An in-page tap ({@link BrowserAudioTap}, {@code audio-tap.js}) routes what
+ * each page plays - {@code <audio>}/{@code <video>} elements and the page's
+ * own Web Audio - through a Web Audio graph inside the page, and sends 16-bit
+ * PCM to Java through a JCEF message router. From there it is resampled and
+ * mixed into the browser bus, one stream per page audio context. A gain node
+ * in the page implements each source's mode, so "Stream only" really is
+ * silent on the player's speakers.</p>
  *
- * <p>No part of this class pretends to capture browser audio. When a source asks
- * for a mode that cannot be honoured, {@link #describeLimitation(BrowserSource)}
- * returns the reason for the UI to show.</p>
+ * <p>MCEF Modern starts Chromium with {@code --autoplay-policy=no-user-gesture-required}
+ * (alerts play without a click) and {@code --disable-web-security}, so media
+ * from other sites is not "tainted" and can be captured.</p>
+ *
+ * <h2>Limits</h2>
+ * <ul>
+ *   <li>Speech synthesis ({@code speechSynthesis}) and audio playing inside
+ *       iframes are not routed through the tap: they are heard locally but do
+ *       not reach outputs, and "Off" / "Stream only" cannot silence them.</li>
+ *   <li>Latency is about one Web Audio block (~40 ms) plus the mixer's.</li>
+ * </ul>
  */
 public final class BrowserAudioBridge {
 
-    /** What the current engine can actually do. */
+    /** What the current engine can do. */
     public enum Capability {
-        /** Per-browser PCM capture available (not reachable on this JCEF build). */
-        CAPTURE_SUPPORTED,
-        /** Audio plays to the system device only. */
-        MONITOR_ONLY
+        /** Page audio captured by the in-page tap. */
+        IN_PAGE_CAPTURE,
+        /** The browser engine is not running; nothing to capture. */
+        UNAVAILABLE
     }
 
-    private static final String REASON =
-            "JCEF 146.0.10 (bundled by MCEF Modern for Minecraft 26.1) exposes no CefAudioHandler, "
-                    + "so Chromium audio cannot be captured per browser. Alerts are still audible "
-                    + "locally; to include them in the broadcast, enable system audio capture in "
-                    + "Audio settings.";
+    private static final String LIMITS =
+            "Page audio from <audio>/<video> elements and Web Audio is captured inside the page. "
+                    + "Speech synthesis and audio inside iframes are only heard locally.";
 
     private BrowserAudioBridge() {
     }
 
-    /** Always {@link Capability#MONITOR_ONLY} on the supported JCEF build. */
     public static Capability capability() {
-        return Capability.MONITOR_ONLY;
+        return Capability.IN_PAGE_CAPTURE;
     }
 
     public static boolean canCaptureBrowserAudio() {
-        return capability() == Capability.CAPTURE_SUPPORTED;
+        return capability() == Capability.IN_PAGE_CAPTURE;
     }
 
-    /** The reason browser audio cannot reach the stream, for UI and logs. */
+    /** What browser audio capture does and does not cover, for the UI and logs. */
     public static String limitationReason() {
-        return REASON;
+        return LIMITS;
     }
 
     /**
-     * A warning for a source whose audio mode cannot be honoured, or {@code null}
-     * when its configuration is fully achievable.
+     * A note for a source whose mode sends audio to outputs, or {@code null}
+     * when its mode needs no caveat.
      */
     public static String describeLimitation(BrowserSource source) {
-        if (canCaptureBrowserAudio()) {
-            return null;
-        }
         return switch (source.audioMode()) {
             case OFF, MONITOR_ONLY -> null;
-            case STREAM_ONLY, MONITOR_AND_STREAM ->
-                    "This source's audio cannot be mixed into the broadcast. " + REASON;
+            case STREAM_ONLY, MONITOR_AND_STREAM -> "This page's audio is mixed into recordings and the stream "
+                    + "(Browser Sources bus). " + LIMITS;
         };
     }
 
     /** Logs the capability once at startup so it is visible in bug reports. */
     public static void logCapability() {
-        StreamAbleLog.BROWSER.info("Browser audio capability: {} - {}", capability(), REASON);
+        StreamAbleLog.BROWSER.info("Browser audio capability: {} - {}", capability(), LIMITS);
+    }
+
+    /** The modes the engine can honour: all of them, with the limits above. */
+    public static boolean supports(BrowserAudioMode mode) {
+        return mode != null;
     }
 }

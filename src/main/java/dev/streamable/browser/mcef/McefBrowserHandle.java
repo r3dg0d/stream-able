@@ -28,6 +28,13 @@ public final class McefBrowserHandle implements BrowserHandle {
 
     private volatile String url;
     private volatile String pendingCss = "";
+    private volatile dev.streamable.source.BrowserAudioMode audioMode = dev.streamable.source.BrowserAudioMode.MONITOR_ONLY;
+    private volatile float audioVolume = 1f;
+    private volatile AudioSink audioSink;
+    private volatile String earlyScriptId;
+    private final AtomicBoolean initialNavigationDone = new AtomicBoolean(false);
+    private final AtomicBoolean earlyScriptRequested = new AtomicBoolean(false);
+    private final AtomicBoolean startFallbackArmed = new AtomicBoolean(false);
     private int width;
     private int height;
     private int frameRate = -1;
@@ -68,6 +75,7 @@ public final class McefBrowserHandle implements BrowserHandle {
             return;
         }
         this.url = newUrl.trim();
+        initialNavigationDone.set(true);
         browser.getCefBrowser().loadURL(this.url);
     }
 
@@ -127,6 +135,113 @@ public final class McefBrowserHandle implements BrowserHandle {
             browser.getCefBrowser().executeJavaScript(code, currentUrl(), 0);
         } catch (RuntimeException e) {
             StreamAbleLog.BROWSER.warn("Failed to execute script in browser source", e);
+        }
+    }
+
+    @Override
+    public void configureAudio(dev.streamable.source.BrowserAudioMode mode, float volume) {
+        this.audioMode = mode;
+        this.audioVolume = volume;
+        if (!initialNavigationDone.get()) {
+            // Still on the blank start page: onBlankPageLoaded() registers the
+            // tap and navigates once the browser is live. Until then CEF drops
+            // navigations and DevTools calls.
+            if (startFallbackArmed.compareAndSet(false, true)) {
+                java.util.concurrent.CompletableFuture.delayedExecutor(5, java.util.concurrent.TimeUnit.SECONDS)
+                        .execute(this::navigateToInitialUrl);
+            }
+            return;
+        }
+        executeJavaScript(audioScript());   // the current document
+        registerEarlyScript();              // every future document, before its own scripts
+    }
+
+    /** Called when a main-frame document finishes loading; starts the real page after the blank one. */
+    void onMainFrameLoaded() {
+        if (!initialNavigationDone.get() && earlyScriptRequested.compareAndSet(false, true)) {
+            registerEarlyScript();
+        }
+    }
+
+    /**
+     * Registers the audio tap with DevTools' {@code Page.addScriptToEvaluateOnNewDocument},
+     * which runs it in every new document before any page script - so audio a
+     * page wires up while it loads (inline scripts, libraries like Howler.js)
+     * is tapped too. Injecting at load start or end is too late for that.
+     * The browser is created blank and only navigates to its real URL once
+     * this is in place (or after a short timeout if DevTools is unavailable):
+     * the blank page's load end is the first moment CEF accepts either.
+     */
+    private void registerEarlyScript() {
+        if (closed.get()) {
+            return;
+        }
+        org.cef.browser.CefDevToolsClient devTools;
+        try {
+            devTools = browser.getCefBrowser().getDevToolsClient();
+        } catch (RuntimeException | LinkageError e) {
+            devTools = null;
+        }
+        if (devTools == null) {
+            navigateToInitialUrl();
+            return;
+        }
+        org.cef.browser.CefDevToolsClient client = devTools;
+        String previous = earlyScriptId;
+        java.util.concurrent.CompletableFuture<String> removed;
+        if (previous == null) {
+            // Chromium only runs registered scripts while the Page domain is enabled.
+            removed = client.executeDevToolsMethod("Page.enable");
+        } else {
+            com.google.gson.JsonObject remove = new com.google.gson.JsonObject();
+            remove.addProperty("identifier", previous);
+            removed = client.executeDevToolsMethod("Page.removeScriptToEvaluateOnNewDocument", remove.toString());
+        }
+        com.google.gson.JsonObject params = new com.google.gson.JsonObject();
+        params.addProperty("source", audioScript());
+        removed.exceptionally(e -> "")
+                .thenCompose(ignored -> client.executeDevToolsMethod("Page.addScriptToEvaluateOnNewDocument",
+                        params.toString()))
+                .orTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                .whenComplete((result, error) -> {
+                    if (error == null && result != null) {
+                        try {
+                            earlyScriptId = com.google.gson.JsonParser.parseString(result).getAsJsonObject()
+                                    .get("identifier").getAsString();
+                        } catch (RuntimeException e) {
+                            StreamAbleLog.BROWSER.debug("Unexpected DevTools reply: {}", e.toString());
+                        }
+                    } else {
+                        StreamAbleLog.BROWSER.info("Early audio tap not registered: {}", String.valueOf(error));
+                    }
+                    navigateToInitialUrl();
+                });
+    }
+
+    /** The first navigation, deferred until the early scripts are registered. */
+    private void navigateToInitialUrl() {
+        if (initialNavigationDone.compareAndSet(false, true) && !closed.get()) {
+            StreamAbleLog.BROWSER.debug("Opening the source page (early audio tap {})", earlyScriptId == null ? "not registered" : "registered");
+            browser.getCefBrowser().loadURL(url);
+        }
+    }
+
+
+    /** The audio tap with this source's settings, injected on every page load. */
+    String audioScript() {
+        return dev.streamable.browser.audio.BrowserAudioTap.script(audioMode, audioVolume);
+    }
+
+    @Override
+    public void setAudioSink(AudioSink sink) {
+        this.audioSink = sink;
+    }
+
+    /** A chunk from the page's tap; dropped unless this source is set to reach outputs. */
+    void deliverAudio(dev.streamable.browser.audio.BrowserAudioTap.Chunk chunk) {
+        AudioSink sink = audioSink;
+        if (sink != null && !closed.get() && dev.streamable.browser.audio.BrowserAudioTap.captures(audioMode)) {
+            sink.accept(chunk.stream(), chunk.sampleRate(), chunk.channels(), chunk.samples());
         }
     }
 

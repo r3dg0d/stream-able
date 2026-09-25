@@ -36,6 +36,22 @@ public interface BrowserHandle extends AutoCloseable {
     /** Applies the user's custom CSS plus the transparency guarantees. */
     void applyCss(String css);
 
+    /** Receives the page's audio captured by the in-page tap (CEF threads; must not block). */
+    @FunctionalInterface
+    interface AudioSink {
+        void accept(int stream, int sampleRate, int channels, short[] samples);
+    }
+
+    /**
+     * Sets where the page's audio goes: heard locally, captured for outputs,
+     * both or neither, at a volume. Applied now and after every page load.
+     */
+    default void configureAudio(dev.streamable.source.BrowserAudioMode mode, float volume) {
+    }
+
+    default void setAudioSink(AudioSink sink) {
+    }
+
     // ---- input (coordinates are source-local pixels) -----------------------
 
     void mouseMoved(double localX, double localY);

@@ -120,6 +120,16 @@ public final class StreamAbleClient {
         this.streaming = new StreamController(ffmpeg, encoderProbe);
         this.replayBuffer = new dev.streamable.recording.replay.ReplayBuffer(ffmpeg, encoderProbe, gameDirectory,
                 audioMixer);
+        // Page audio from browser sources set to reach outputs, one mixer
+        // stream per page audio context, summed on the browser bus.
+        dev.streamable.audio.StreamResampler browserResampler = new dev.streamable.audio.StreamResampler();
+        browsers.setAudioSink((source, stream, rate, channels, samples) -> {
+            if (audioMixer.isActive()) {
+                String key = source + ":" + stream;
+                byte[] pcm = browserResampler.toMixerFormat(key, samples, channels, rate);
+                audioMixer.submit(dev.streamable.audio.AudioBus.Kind.BROWSER, key, pcm, pcm.length);
+            }
+        });
         this.streaming.setDestinations(loadDestinations());
         applyInterfaceSettings();
     }

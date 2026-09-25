@@ -30,6 +30,18 @@ public final class BrowserSourceManager implements AutoCloseable {
     public static final String MCEF_MOD_ID = "mcef-modern";
 
     private final Map<UUID, BrowserHandle> handles = new HashMap<>();
+
+    /** Receives captured page audio, tagged with its source (CEF threads; must not block). */
+    @FunctionalInterface
+    public interface SourceAudioSink {
+        void accept(UUID source, int stream, int sampleRate, int channels, short[] samples);
+    }
+
+    private volatile SourceAudioSink audioSink;
+
+    public void setAudioSink(SourceAudioSink sink) {
+        this.audioSink = sink;
+    }
     /** Remembers what we last pushed, so ticks are cheap no-ops when nothing changed. */
     private final Map<UUID, AppliedState> applied = new HashMap<>();
 
@@ -39,7 +51,8 @@ public final class BrowserSourceManager implements AutoCloseable {
     private BrowserRuntime runtime;
     private volatile boolean runtimeReady;
 
-    private record AppliedState(String url, int width, int height, String css, int fps) {
+    private record AppliedState(String url, int width, int height, String css, int fps,
+                                dev.streamable.source.BrowserAudioMode audioMode, float audioVolume) {
     }
 
     /** Whether the browser engine mod is installed at all. */
@@ -231,10 +244,18 @@ public final class BrowserSourceManager implements AutoCloseable {
                     source.viewportWidth(), source.viewportHeight());
             handle.setFrameRate(source.browserFps());
             handle.applyCss(source.customCss());
+            UUID id = source.id();
+            handle.setAudioSink((stream, rate, channels, samples) -> {
+                SourceAudioSink sink = audioSink;
+                if (sink != null) {
+                    sink.accept(id, stream, rate, channels, samples);
+                }
+            });
+            handle.configureAudio(source.audioMode(), source.audioVolume());
             handles.put(source.id(), handle);
             applied.put(source.id(), new AppliedState(source.url(),
                     source.viewportWidth(), source.viewportHeight(),
-                    source.customCss(), source.browserFps()));
+                    source.customCss(), source.browserFps(), source.audioMode(), source.audioVolume()));
             StreamAbleLog.BROWSER.info("Created browser source '{}' ({}x{})",
                     source.name(), source.viewportWidth(), source.viewportHeight());
         } catch (RuntimeException e) {
@@ -248,7 +269,8 @@ public final class BrowserSourceManager implements AutoCloseable {
         int height = source.viewportHeight();
         if (last != null && last.width() == width && last.height() == height
                 && last.url().equals(source.url()) && last.css().equals(source.customCss())
-                && last.fps() == source.browserFps()) {
+                && last.fps() == source.browserFps() && last.audioMode() == source.audioMode()
+                && last.audioVolume() == source.audioVolume()) {
             return;   // nothing changed: do not touch Chromium at all
         }
         try {
@@ -264,8 +286,11 @@ public final class BrowserSourceManager implements AutoCloseable {
             if (last == null || last.fps() != source.browserFps()) {
                 handle.setFrameRate(source.browserFps());
             }
+            if (last == null || last.audioMode() != source.audioMode() || last.audioVolume() != source.audioVolume()) {
+                handle.configureAudio(source.audioMode(), source.audioVolume());
+            }
             applied.put(source.id(), new AppliedState(source.url(), width, height,
-                    source.customCss(), source.browserFps()));
+                    source.customCss(), source.browserFps(), source.audioMode(), source.audioVolume()));
         } catch (RuntimeException e) {
             StreamAbleLog.BROWSER.error("Failed to update browser source '{}'", source.name(), e);
         }
