@@ -75,6 +75,9 @@ nothing needs to be re-entered.
   whole classpath on the command line: ONNX Runtime regex-matches the command line
   while starting up and overflowed the 1 MB thread stack. Threads that start native
   runtimes now get a stack sized to the command line.
+- Streams and recordings could turn black with garbled lines at the top when
+  another mod (e.g. Voxy) left `GL_PACK_ROW_LENGTH` set; the frame readback now
+  resets the pack row length and skips, and restores them afterwards.
 
 ### Security
 - Unpinned FFmpeg downloads from Record-able or Stream-able 1.0 are no longer

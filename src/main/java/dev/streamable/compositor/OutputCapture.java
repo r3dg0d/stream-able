@@ -175,7 +175,13 @@ public final class OutputCapture implements AutoCloseable {
         int prevFramebuffer = GL11.glGetInteger(GL30.GL_FRAMEBUFFER_BINDING);
         int prevReadFramebuffer = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int prevPbo = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
+        // Other mods leave pack state behind (Voxy's model bakery sets
+        // GL_PACK_ROW_LENGTH to its texture width and keeps it), which packs
+        // every row of the frame into the first few rows of the buffer.
         int prevAlignment = GL11.glGetInteger(GL11.GL_PACK_ALIGNMENT);
+        int prevRowLength = GL11.glGetInteger(GL11.GL_PACK_ROW_LENGTH);
+        int prevSkipRows = GL11.glGetInteger(GL11.GL_PACK_SKIP_ROWS);
+        int prevSkipPixels = GL11.glGetInteger(GL11.GL_PACK_SKIP_PIXELS);
         int[] prevViewport = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, prevViewport);
         float[] clear = new float[4];
@@ -200,6 +206,9 @@ public final class OutputCapture implements AutoCloseable {
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
+            GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, 0);
+            GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, 0);
+            GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, 0);
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pbo[slot]);
             GL11.glReadPixels(0, 0, output.width(), output.height(), GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, 0L);
             fence[slot] = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -213,6 +222,9 @@ public final class OutputCapture implements AutoCloseable {
             broken = true;
         } finally {
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, prevAlignment);
+            GL11.glPixelStorei(GL11.GL_PACK_ROW_LENGTH, prevRowLength);
+            GL11.glPixelStorei(GL11.GL_PACK_SKIP_ROWS, prevSkipRows);
+            GL11.glPixelStorei(GL11.GL_PACK_SKIP_PIXELS, prevSkipPixels);
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, prevPbo);
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, prevFramebuffer);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevReadFramebuffer);
