@@ -2,6 +2,8 @@ package dev.streamable.runtime;
 
 import dev.streamable.StreamAbleLog;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +32,8 @@ public final class RuntimeManager implements AutoCloseable {
 
     /** Production wiring: bundled manifest, HTTPS, two background threads. */
     public static RuntimeManager create(Path gameDirectory, String modVersion) {
-        ExecutorService executor = Executors.newFixedThreadPool(2, namedDaemonThreads("stream-able-runtime"));
+        ExecutorService executor = Executors.newFixedThreadPool(2,
+                namedDaemonThreads("stream-able-runtime", nativeStackBytes()));
         RuntimeContext context = new RuntimeContext(
                 gameDirectory.resolve("stream-able").resolve("runtime"),
                 RuntimePlatform.current(),
@@ -76,13 +79,44 @@ public final class RuntimeManager implements AutoCloseable {
     }
 
     public static ThreadFactory namedDaemonThreads(String prefix) {
+        return namedDaemonThreads(prefix, 0);
+    }
+
+    /**
+     * @param stackBytes thread stack size, or {@code 0} for the JVM default
+     */
+    public static ThreadFactory namedDaemonThreads(String prefix, long stackBytes) {
         AtomicInteger counter = new AtomicInteger();
         return runnable -> {
-            Thread thread = new Thread(runnable, prefix + "-" + counter.incrementAndGet());
+            Thread thread = new Thread(null, runnable, prefix + "-" + counter.incrementAndGet(), stackBytes);
             thread.setDaemon(true);
             thread.setPriority(Thread.NORM_PRIORITY - 1);
             return thread;
         };
+    }
+
+    /**
+     * Stack size for threads that bring up native runtimes.
+     *
+     * <p>ONNX Runtime matches a {@code std::regex} against
+     * {@code /proc/self/cmdline} while creating its environment, and
+     * libstdc++'s regex executor recurses about three frames (~260 bytes of
+     * stack) per character. Launchers put the whole classpath on the command
+     * line - 11.5 KB under Prism with a large modpack - which overflows the
+     * default 1 MB Java stack inside native code and kills the game with
+     * SIGSEGV instead of an exception. The stack is sized from the actual
+     * command line with a wide margin; it is only reserved address space
+     * until used.</p>
+     */
+    public static long nativeStackBytes() {
+        long commandLine = 0;
+        try {
+            commandLine = Files.readAllBytes(Path.of("/proc/self/cmdline")).length;
+        } catch (IOException | RuntimeException e) {
+            // Not Linux: no such file, and no known deep recursion either.
+        }
+        long wanted = commandLine * 1024 + (16L << 20);
+        return Math.clamp(wanted, 64L << 20, 1L << 30);
     }
 
     @Override

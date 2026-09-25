@@ -65,7 +65,8 @@ public final class NoiseCancellationManager implements AutoCloseable {
     private final NoiseCancellationStage stage;
     private final BackendFactory factory;
     private final ExecutorService loader = Executors.newSingleThreadExecutor(
-            RuntimeManager.namedDaemonThreads("stream-able-ai-loader"));
+            // Opening a session runs ONNX Runtime native code; see nativeStackBytes().
+            RuntimeManager.namedDaemonThreads("stream-able-ai-loader", RuntimeManager.nativeStackBytes()));
     private final Map<MicrophoneSettings.NoiseBackend, String> rejected =
             java.util.Collections.synchronizedMap(new LinkedHashMap<>());
 

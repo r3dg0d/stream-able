@@ -71,6 +71,10 @@ nothing needs to be re-entered.
 - Sources routed to "my screen" were never actually drawn on screen.
 - Outputs could show Stream-able's own screens when no output was running yet.
 - The destination **Reconnect** button closed its encoder group instead of restarting it.
+- Installing ONNX Runtime crashed the game (SIGSEGV) under launchers that put the
+  whole classpath on the command line: ONNX Runtime regex-matches the command line
+  while starting up and overflowed the 1 MB thread stack. Threads that start native
+  runtimes now get a stack sized to the command line.
 
 ### Security
 - Unpinned FFmpeg downloads from Record-able or Stream-able 1.0 are no longer
