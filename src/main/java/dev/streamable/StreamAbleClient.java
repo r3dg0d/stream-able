@@ -78,6 +78,13 @@ public final class StreamAbleClient {
     private final FFmpegCapabilityProbe encoderProbe;
     private final RecordingController recording;
     private final StreamController streaming;
+    private final dev.streamable.recording.replay.ReplayBuffer replayBuffer;
+    private final dev.streamable.recording.replay.ClipTriggers clipTriggers =
+            new dev.streamable.recording.replay.ClipTriggers();
+    private volatile boolean advancementEarned;
+    private net.minecraft.world.entity.LivingEntity lastAttacked;
+    private long lastAttackNanos;
+    private boolean wasInWorld;
     private final dev.streamable.streaming.test.StreamTestController streamTests =
             new dev.streamable.streaming.test.StreamTestController();
     private dev.streamable.diagnostics.HealthReport cachedHealth;
@@ -111,6 +118,8 @@ public final class StreamAbleClient {
         this.microphone = new dev.streamable.audio.mic.MicrophoneService(audioMixer, config.microphone, runtimes);
         this.recording = new RecordingController(ffmpeg, encoderProbe, gameDirectory, audioMixer);
         this.streaming = new StreamController(ffmpeg, encoderProbe);
+        this.replayBuffer = new dev.streamable.recording.replay.ReplayBuffer(ffmpeg, encoderProbe, gameDirectory,
+                audioMixer);
         this.streaming.setDestinations(loadDestinations());
         applyInterfaceSettings();
     }
@@ -161,6 +170,10 @@ public final class StreamAbleClient {
 
     public RecordingController recording() {
         return recording;
+    }
+
+    public dev.streamable.recording.replay.ReplayBuffer replayBuffer() {
+        return replayBuffer;
     }
 
     public StreamController streaming() {
@@ -257,6 +270,11 @@ public final class StreamAbleClient {
             microphone.acquire(dev.streamable.audio.mic.MicrophoneService.User.STREAMING);
         } else {
             microphone.release(dev.streamable.audio.mic.MicrophoneService.User.STREAMING);
+        }
+        if (replayBuffer.isRunning()) {
+            microphone.acquire(dev.streamable.audio.mic.MicrophoneService.User.REPLAY_BUFFER);
+        } else {
+            microphone.release(dev.streamable.audio.mic.MicrophoneService.User.REPLAY_BUFFER);
         }
         applyVoiceChatSettings();
     }
@@ -430,6 +448,7 @@ public final class StreamAbleClient {
         }
         browsers.tick(sources);
         streaming.tick();
+        tickReplayBuffer(Minecraft.getInstance());
         if (recording.tick()) {
             stopRecording();
         }
@@ -568,7 +587,7 @@ public final class StreamAbleClient {
 
     /** Releases the mixer once neither output needs it. */
     private void detachMixerIfIdle() {
-        if (recording.isActive() || streaming.isLive()) {
+        if (recording.isActive() || streaming.isLive() || replayBuffer.isRunning()) {
             return;
         }
         if (mixerTapConsumer != null) {
@@ -594,7 +613,8 @@ public final class StreamAbleClient {
             return error;
         }
         video.startStreamingOutput(new VideoPipeline.OutputConfig("Streaming", output,
-                config.video.streaming.effectiveMode(), config.streaming.fps, streaming::submitFrame));
+                config.video.streaming.effectiveMode(), config.streaming.fps, streaming::submitFrame,
+                () -> config.video.watermark.onStream ? config.video.watermark : null));
         applyMicrophoneSettings();
         return null;
     }
@@ -622,7 +642,8 @@ public final class StreamAbleClient {
             return error;
         }
         video.startRecordingOutput(new VideoPipeline.OutputConfig("Recording", output,
-                config.video.recording.effectiveMode(), config.recording.fps, recording::submitFrame));
+                config.video.recording.effectiveMode(), config.recording.fps, recording::submitFrame,
+                () -> config.video.watermark.onRecording ? config.video.watermark : null));
         applyMicrophoneSettings();
         return null;
     }
@@ -633,6 +654,133 @@ public final class StreamAbleClient {
         applyMicrophoneSettings();
         detachMixerIfIdle();
         return file;
+    }
+
+    // ---- replay buffer and clips ------------------------------------------------
+
+    /**
+     * Starts the replay buffer at the recording's size, encoder and quality.
+     *
+     * @return {@code null} when started, otherwise why not
+     */
+    public String startReplayBuffer() {
+        if (replayBuffer.isRunning()) {
+            return null;
+        }
+        attachMixer();
+        Resolution output = recordingOutput();
+        String error = replayBuffer.start(config.recording, output);
+        if (error != null) {
+            detachMixerIfIdle();
+            return error;
+        }
+        video.startReplayOutput(new VideoPipeline.OutputConfig("Replay buffer", output,
+                config.video.recording.effectiveMode(), config.recording.fps, replayBuffer::submitFrame,
+                () -> config.video.watermark.onRecording ? config.video.watermark : null));
+        applyMicrophoneSettings();
+        return null;
+    }
+
+    public void stopReplayBuffer() {
+        video.stopReplayOutput();
+        replayBuffer.stop();
+        applyMicrophoneSettings();
+        detachMixerIfIdle();
+    }
+
+    /**
+     * Saves the last {@code replayBufferSeconds} as a clip, in the background.
+     * The result is announced on the stream HUD (never in outputs).
+     */
+    public java.util.concurrent.CompletableFuture<Path> saveReplay(String reason) {
+        java.util.concurrent.CompletableFuture<Path> saving = replayBuffer.save(reason, config.recording.replayBufferSeconds,
+                replayBuffer.clipsDirectory(recording.outputDirectory(config.recording)),
+                new dev.streamable.ffmpeg.AudioProfile(config.recording.audioCodec, config.recording.audioBitrateKbps,
+                        config.recording.audioSampleRate, 2));
+        saving.whenComplete((file, error) -> Minecraft.getInstance().execute(() -> {
+            if (error == null) {
+                dev.streamable.ui.StreamHud.flash("Clip saved: " + file.getFileName(), 0xFF3DD68C);
+            } else {
+                Throwable cause = error instanceof java.util.concurrent.CompletionException && error.getCause() != null
+                        ? error.getCause() : error;
+                if (cause instanceof java.io.UncheckedIOException io && io.getCause() != null) {
+                    cause = io.getCause();
+                }
+                dev.streamable.ui.StreamHud.flash("Clip not saved: " + cause.getMessage(), 0xFFFF5C6C);
+                StreamAbleLog.RECORDING.warn("Clip not saved: {}", cause.getMessage());
+            }
+        }));
+        return saving;
+    }
+
+    /** Called by the toast mixin when the game shows an advancement toast. */
+    public void noteAdvancementEarned() {
+        advancementEarned = true;
+    }
+
+    /** Called by the attack callback; remembers the target so its death can count as a kill. */
+    public void noteAttack(net.minecraft.world.entity.Entity target) {
+        if (target instanceof net.minecraft.world.entity.LivingEntity living
+                && !(target instanceof net.minecraft.world.entity.decoration.ArmorStand)) {
+            lastAttacked = living;
+            lastAttackNanos = System.nanoTime();
+        }
+    }
+
+    /** Auto start/stop with the world, and automatic clips. Client thread. */
+    private void tickReplayBuffer(Minecraft client) {
+        boolean inWorld = client.level != null && client.player != null;
+        if (inWorld != wasInWorld) {
+            wasInWorld = inWorld;
+            if (inWorld && config.recording.replayBufferEnabled && !replayBuffer.isRunning()) {
+                String error = startReplayBuffer();
+                if (error != null) {
+                    StreamAbleLog.RECORDING.warn("Replay buffer did not start: {}", error);
+                }
+            } else if (!inWorld && replayBuffer.isRunning()) {
+                stopReplayBuffer();
+            }
+        }
+        if (!replayBuffer.isRunning() && video.stats().replay() != null) {
+            video.stopReplayOutput();   // the encoder died; release its capture
+            detachMixerIfIdle();
+        }
+        long now = System.nanoTime();
+        boolean killed = false;
+        if (lastAttacked != null) {
+            if (lastAttacked.isDeadOrDying()) {
+                killed = now - lastAttackNanos < 5_000_000_000L;
+                lastAttacked = null;
+            } else if (now - lastAttackNanos > 5_000_000_000L || lastAttacked.isRemoved()) {
+                lastAttacked = null;
+            }
+        }
+        boolean advancement = advancementEarned;
+        advancementEarned = false;
+        var observation = new dev.streamable.recording.replay.ClipTriggers.Observation(inWorld,
+                inWorld && client.player.isDeadOrDying(),
+                inWorld ? client.level.dimension().identifier().toString() : null, killed);
+        var due = clipTriggers.tick(now, observation, enabledClipReasons(), advancement);
+        if (!due.isEmpty() && replayBuffer.isRunning()) {
+            saveReplay(dev.streamable.recording.replay.ClipTriggers.tag(due));
+        }
+    }
+
+    private java.util.Set<dev.streamable.recording.replay.ClipTriggers.Reason> enabledClipReasons() {
+        var set = java.util.EnumSet.noneOf(dev.streamable.recording.replay.ClipTriggers.Reason.class);
+        if (config.recording.autoClipOnDeath) {
+            set.add(dev.streamable.recording.replay.ClipTriggers.Reason.DEATH);
+        }
+        if (config.recording.autoClipOnKill) {
+            set.add(dev.streamable.recording.replay.ClipTriggers.Reason.KILL);
+        }
+        if (config.recording.autoClipOnAdvancement) {
+            set.add(dev.streamable.recording.replay.ClipTriggers.Reason.ADVANCEMENT);
+        }
+        if (config.recording.autoClipOnDimensionChange) {
+            set.add(dev.streamable.recording.replay.ClipTriggers.Reason.DIMENSION);
+        }
+        return set;
     }
 
     public StreamHealth health() {
@@ -724,6 +872,7 @@ public final class StreamAbleClient {
     public void shutdown() {
         try {
             streamTests.cancel();
+            replayBuffer.close();
             if (recording.isActive()) {
                 stopRecording();
             }

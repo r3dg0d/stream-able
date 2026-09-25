@@ -26,5 +26,7 @@
   "key.streamable.toggle_mic_mute": "Mute / Unmute Microphone",
   "key.streamable.push_to_talk": "Push to Talk (hold)",
   "key.streamable.push_to_mute": "Push to Mute (hold)",
-  "key.streamable.toggle_noise_bypass": "Bypass AI Noise Cancellation"
+  "key.streamable.toggle_noise_bypass": "Bypass AI Noise Cancellation",
+  "key.streamable.save_replay": "Save Replay (clip)",
+  "key.streamable.toggle_replay_buffer": "Start/Stop Replay Buffer"
 }

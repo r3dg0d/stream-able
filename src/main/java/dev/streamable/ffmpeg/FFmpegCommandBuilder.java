@@ -411,6 +411,91 @@ public final class FFmpegCommandBuilder {
         return List.copyOf(args);
     }
 
+    /**
+     * The replay buffer's encoder: the recording's video settings, written as
+     * a rolling ring of MPEG-TS segments. Keyframes are forced on every segment
+     * boundary so each segment starts cleanly and a clip can be cut at any of
+     * them; the CSV list records each finished segment's start and end time on
+     * the encoder timeline.
+     *
+     * @param segmentSeconds length of one segment
+     * @param wrap           number of segment files kept before the oldest is reused
+     * @param segmentPattern e.g. {@code /dir/seg%03d.ts}
+     * @param listFile       CSV segment list
+     */
+    public static List<String> buildReplaySegmentCommand(String ffmpegExecutable, VideoProfile video,
+                                                         int sourceWidth, int sourceHeight, int segmentSeconds,
+                                                         int wrap, String segmentPattern, String listFile) {
+        List<String> args = new ArrayList<>();
+        addGlobalArgs(args, ffmpegExecutable, video.encoder());
+        args.add("-y");
+        addRawVideoInput(args, sourceWidth, sourceHeight, video.fps(), "rgb24");
+        addVideoOutputArgs(args, sourceWidth, sourceHeight, video);
+        args.add("-force_key_frames");
+        args.add("expr:gte(t,n_forced*" + segmentSeconds + ")");
+        args.add("-an");
+        args.add("-f");
+        args.add("segment");
+        args.add("-segment_format");
+        args.add("mpegts");
+        args.add("-segment_time");
+        args.add(Integer.toString(segmentSeconds));
+        args.add("-segment_wrap");
+        args.add(Integer.toString(wrap));
+        args.add("-segment_list");
+        args.add(listFile);
+        args.add("-segment_list_type");
+        args.add("csv");
+        args.add("-segment_list_size");
+        args.add(Integer.toString(wrap));
+        args.add("-reset_timestamps");
+        args.add("0");
+        args.add(segmentPattern);
+        return List.copyOf(args);
+    }
+
+    /**
+     * Joins copied replay segments (concat demuxer, stream copy - no
+     * re-encode) with the matching program audio into one clip file.
+     */
+    public static List<String> buildClipCommand(String ffmpegExecutable, String concatList, String audioFile,
+                                                AudioProfile audio, String outputFile) {
+        List<String> args = new ArrayList<>();
+        args.add(ffmpegExecutable);
+        args.add("-nostdin");
+        args.add("-hide_banner");
+        args.add("-loglevel");
+        args.add("error");
+        args.add("-y");
+        args.add("-f");
+        args.add("concat");
+        args.add("-safe");
+        args.add("0");
+        args.add("-i");
+        args.add(concatList);
+        if (audioFile != null) {
+            args.add("-i");
+            args.add(audioFile);
+        }
+        args.add("-map");
+        args.add("0:v:0");
+        if (audioFile != null) {
+            args.add("-map");
+            args.add("1:a:0");
+        }
+        args.add("-c:v");
+        args.add("copy");
+        if (audioFile != null) {
+            addAudioCodecArgs(args, audio);
+        }
+        if (outputFile.toLowerCase(Locale.ROOT).endsWith(".mp4")) {
+            args.add("-movflags");
+            args.add("+faststart");
+        }
+        args.add(outputFile);
+        return List.copyOf(args);
+    }
+
     /** One captured audio track to mux into a recording. */
     public record AudioTrack(String file, double offsetSeconds, String title) {
     }

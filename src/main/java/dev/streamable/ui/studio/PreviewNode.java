@@ -78,6 +78,8 @@ final class PreviewNode extends UiNode {
         framing(p, "Recording", client.recordingOutput(), video.recording.effectiveMode(), canvas,
                 px, py, scale, Theme.RECORDING);
 
+        watermark(p, video.watermark, client.recordingOutput(), video.recording.effectiveMode(), canvas, px, py, scale);
+
         String label = "PROGRAM " + canvas.label() + " · " + canvas.marketedRatio();
         Widgets.StatusPill.drawPill(p, x + 6, y + 6, label, Theme.TEXT_SECONDARY, false);
         if (client.video().stats().frozen()) {
@@ -85,6 +87,37 @@ final class PreviewNode extends UiNode {
             int w = p.textWidth(note, Theme.TEXT_CAPTION, Painter.Weight.SEMIBOLD) + 18;
             Widgets.StatusPill.drawPill(p, x + width - w - 6, y + 6, note, Theme.INFO, false);
         }
+    }
+
+    /**
+     * Where the watermark will appear, drawn over the preview at the corner of
+     * the recording's visible region (the stream uses the same rule in its own
+     * frame). Approximate: the real one is rasterised into each output.
+     */
+    private static void watermark(Painter p, VideoSettings.Watermark mark, Resolution output,
+                                  dev.streamable.video.ScalingMode mode, Resolution canvas, int px, int py, double scale) {
+        if (mark == null || !mark.shows() || (!mark.onRecording && !mark.onStream)) {
+            return;
+        }
+        OutputTransform t = OutputTransform.compute(canvas, output, mode);
+        float rx = (float) (px + t.srcX() * scale);
+        float ry = (float) (py + t.srcY() * scale);
+        float rw = (float) (t.srcW() * scale);
+        float rh = (float) (t.srcH() * scale);
+        float textScale = Math.max(0.4f, (float) (rh * mark.sizePercent / 100.0 / 8.0));
+        String text = mark.text.strip();
+        float w = p.textWidth(text, textScale, Painter.Weight.SEMIBOLD);
+        float h = 8 * textScale;
+        float margin = rh * 0.025f;
+        float x = switch (mark.corner) {
+            case TOP_LEFT, BOTTOM_LEFT -> rx + margin;
+            case TOP_RIGHT, BOTTOM_RIGHT -> rx + rw - margin - w;
+        };
+        float y = switch (mark.corner) {
+            case TOP_LEFT, TOP_RIGHT -> ry + margin;
+            case BOTTOM_LEFT, BOTTOM_RIGHT -> ry + rh - margin - h;
+        };
+        p.text(text, x, y, Theme.withAlpha(0xFFFFFFFF, (float) mark.opacity), textScale, Painter.Weight.SEMIBOLD);
     }
 
     private static void guide(Painter p, int px, int py, int pw, int ph, float fraction, int color) {

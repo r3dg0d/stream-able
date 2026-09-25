@@ -247,6 +247,15 @@ public final class GlQuadRenderer implements AutoCloseable {
     public void drawTextureRegion(int textureId, double x, double y, double width, double height,
                                   float u0, float v0, float u1, float v1,
                                   int targetWidth, int targetHeight, boolean flipTarget, boolean blend) {
+        drawTextureRegion(textureId, x, y, width, height, u0, v0, u1, v1, targetWidth, targetHeight, flipTarget,
+                blend, 1.0f);
+    }
+
+    /** As above, scaling a premultiplied texture by {@code opacity}. */
+    public void drawTextureRegion(int textureId, double x, double y, double width, double height,
+                                  float u0, float v0, float u1, float v1,
+                                  int targetWidth, int targetHeight, boolean flipTarget, boolean blend,
+                                  float opacity) {
         if (textureId == 0) {
             return;
         }
@@ -254,7 +263,7 @@ public final class GlQuadRenderer implements AutoCloseable {
                 new Point2(x, y), new Point2(x + width, y),
                 new Point2(x + width, y + height), new Point2(x, y + height)
         };
-        drawQuad(textureId, corners, u0, v0, u1, v1, targetWidth, targetHeight, 1.0f,
+        drawQuad(textureId, corners, u0, v0, u1, v1, targetWidth, targetHeight, opacity,
                 true, true, 0, flipTarget, blend);
     }
 

@@ -88,6 +88,23 @@ final class HomePage {
         card.add(new Label(() -> recordingLine(client)).color(Theme.TEXT_SECONDARY).scale(Theme.TEXT_CAPTION));
 
         card.add(new Widgets.Divider());
+        var buffer = client.replayBuffer();
+        Layouts.Row replay = card.add(new Layouts.Row(Theme.SPACE_3));
+        replay.add(new Widgets.StatusPill(() -> buffer.isRunning()
+                ? String.format(Locale.ROOT, "Replay %.0f s", buffer.bufferedSeconds()) : "Replay off",
+                () -> buffer.isRunning() ? Theme.INFO : Theme.TEXT_MUTED, false), -1);
+        replay.add(new Button(() -> buffer.isRunning() ? "Save" : "Start", () -> {
+            if (buffer.isRunning()) {
+                client.saveReplay("manual");
+            } else {
+                String error = client.startReplayBuffer();
+                if (error != null) {
+                    s.error(error);
+                }
+            }
+        }).icon(() -> buffer.isRunning() ? Icons.Icon.DOWN : Icons.Icon.PLAY)
+                .enabledWhen(() -> !buffer.isSaving()).tooltip("Save the last moments as a clip (F12)."), 64);
+        card.add(new Widgets.Divider());
         Layouts.Row live = card.add(new Layouts.Row(Theme.SPACE_3));
         live.add(new Widgets.StatusPill(() -> client.streaming().isLive()
                 ? "LIVE " + client.health().formattedUptime()

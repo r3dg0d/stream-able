@@ -6,7 +6,8 @@
   "client": [
     "GameRendererMixin",
     "GameRendererAccessor",
-    "AudioLibraryMixin"
+    "AudioLibraryMixin",
+    "ToastManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

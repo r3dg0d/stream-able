@@ -45,6 +45,20 @@ public final class StreamHud {
 
     /** Last drawn bounds in GUI pixels, for dragging in the canvas editor. */
     private static volatile int[] lastBounds = new int[4];
+    private static volatile String flashText;
+    private static volatile int flashColor;
+    private static volatile long flashUntilNanos;
+
+    /** Shows a short message on the HUD for a few seconds (e.g. "Clip saved"); never in outputs. */
+    public static void flash(String text, int color) {
+        flashText = text;
+        flashColor = color;
+        flashUntilNanos = System.nanoTime() + 4_000_000_000L;
+    }
+
+    private static String activeFlash() {
+        return flashText != null && System.nanoTime() < flashUntilNanos ? flashText : null;
+    }
 
     private StreamHud() {
     }
@@ -66,7 +80,8 @@ public final class StreamHud {
         InterfaceSettings ui = client.config().ui;
         StreamHealth health = client.health();
         boolean recording = client.recording().isActive();
-        if (!editing && (!ui.showStreamHud || (!health.live() && !recording))) {
+        boolean replay = client.replayBuffer().isRunning();
+        if (!editing && activeFlash() == null && (!ui.showStreamHud || (!health.live() && !recording && !replay))) {
             lastBounds = new int[4];
             return;
         }
@@ -231,11 +246,19 @@ public final class StreamHud {
             labels.add("REC " + Studio.clock(client.recording().elapsedMillis()));
             colors.add(Theme.RECORDING);
         }
+        if (client.replayBuffer().isRunning()) {
+            labels.add("REPLAY " + Studio.clock(client.replayBuffer().configuredSeconds() * 1000L));
+            colors.add(Theme.INFO);
+        }
         if (labels.isEmpty()) {
             labels.add(editing ? "HUD - drag to move" : "Idle");
             colors.add(Theme.TEXT_MUTED);
         }
         rows.add(new Pills(labels, colors));
+        String flash = activeFlash();
+        if (flash != null) {
+            rows.add(new Text(flash, flashColor, 0.8f));
+        }
 
         if (health.live()) {
             HealthReport.Condition network = client.healthReport().network();

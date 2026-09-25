@@ -54,6 +54,8 @@ public final class OutputCapture implements AutoCloseable {
     }
 
     private final String name;
+    private final WatermarkRenderer watermark = new WatermarkRenderer();
+    private java.util.function.Supplier<dev.streamable.config.VideoSettings.Watermark> watermarkSource;
     private final Resolution output;
     private final int frameBytes;
     private final FrameBufferPool pool;
@@ -75,6 +77,11 @@ public final class OutputCapture implements AutoCloseable {
     private volatile long skippedCaptures;
     private volatile long poolExhausted;
     private volatile OutputTransform lastTransform;
+
+    /** Draws the watermark this supplier returns (read every frame, so edits apply live); null for none. */
+    public void setWatermark(java.util.function.Supplier<dev.streamable.config.VideoSettings.Watermark> source) {
+        this.watermarkSource = source;
+    }
 
     public OutputCapture(String name, Resolution output, int maxBuffers) {
         this.name = name;
@@ -185,6 +192,10 @@ public final class OutputCapture implements AutoCloseable {
             renderer.drawTextureRegion(programTexture, transform.dstX(), transform.dstY(),
                     transform.dstW(), transform.dstH(), uv[0], 1f - uv[1], uv[2], 1f - uv[3],
                     output.width(), output.height(), true, false);
+            var mark = watermarkSource == null ? null : watermarkSource.get();
+            if (mark != null) {
+                watermark.draw(renderer, mark, output);
+            }
 
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, framebuffer);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
@@ -328,5 +339,6 @@ public final class OutputCapture implements AutoCloseable {
     @Override
     public void close() {
         release();
+        watermark.close();
     }
 }

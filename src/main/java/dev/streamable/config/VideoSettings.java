@@ -72,6 +72,38 @@ public final class VideoSettings {
     /** How the Minecraft frame is mapped onto the canvas when their sizes differ. */
     public ScalingMode gameScaling = ScalingMode.FIT;
 
+    /** A text watermark drawn into outputs, in a corner of each output frame. */
+    public static final class Watermark {
+        public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
+        public boolean enabled = false;
+        public String text = "";
+        public Corner corner = Corner.BOTTOM_RIGHT;
+        /** Text height as a percentage of the output height. */
+        public double sizePercent = 3.0;
+        public double opacity = 0.8;
+        public boolean onRecording = true;
+        public boolean onStream = true;
+
+        public boolean shows() {
+            return enabled && text != null && !text.isBlank();
+        }
+
+        void validate() {
+            if (corner == null) {
+                corner = Corner.BOTTOM_RIGHT;
+            }
+            if (text == null) {
+                text = "";
+            }
+            text = text.length() > 120 ? text.substring(0, 120) : text;
+            sizePercent = Double.isFinite(sizePercent) ? Math.clamp(sizePercent, 1.0, 15.0) : 3.0;
+            opacity = Double.isFinite(opacity) ? Math.clamp(opacity, 0.05, 1.0) : 0.8;
+        }
+    }
+
+    public Watermark watermark = new Watermark();
+
     public Output recording = new Output(true, 1920, 1080, ScalingMode.NATIVE);
     public Output streaming = new Output(false, 1920, 1080, ScalingMode.FIT);
 
@@ -113,5 +145,9 @@ public final class VideoSettings {
         }
         recording.validate();
         streaming.validate();
+        if (watermark == null) {
+            watermark = new Watermark();
+        }
+        watermark.validate();
     }
 }

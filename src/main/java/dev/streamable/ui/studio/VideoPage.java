@@ -53,6 +53,59 @@ final class VideoPage {
                 OutputValidation.Target.RECORDING);
         outputCard(s, page.add(new Widgets.Card(Theme.SPACE_5)), "Streaming output", client.config().video.streaming,
                 OutputValidation.Target.STREAMING);
+        watermarkCard(s, page.add(new Widgets.Card(Theme.SPACE_5)));
+    }
+
+    private static void watermarkCard(Studio s, Widgets.Card card) {
+        VideoSettings.Watermark mark = s.client().config().video.watermark;
+        card.add(new Widgets.SectionHeader("Watermark", () -> mark.shows()
+                ? "\"" + mark.text.strip() + "\" in the " + cornerName(mark.corner).toLowerCase(java.util.Locale.ROOT)
+                + " corner" : "Text in a corner of the recording and/or stream, e.g. your channel name"));
+        card.add(Toggle.of("Show a watermark", () -> mark.enabled, v -> {
+            mark.enabled = v;
+            s.changed();
+        }));
+        Layouts.Column options = card.add(new Layouts.Column(Theme.SPACE_5));
+        options.visibleWhen(() -> mark.enabled);
+        options.add(new dev.streamable.ui.kit.TextField("Text", () -> mark.text, v -> {
+            mark.text = v;
+            s.changed();
+        }).maxLength(120).placeholder("twitch.tv/yourname"));
+        options.add(new dev.streamable.ui.kit.Segmented(java.util.Arrays.stream(VideoSettings.Watermark.Corner.values())
+                .map(VideoPage::cornerName).toList(), () -> mark.corner.ordinal(), i -> {
+            mark.corner = VideoSettings.Watermark.Corner.values()[i];
+            s.changed();
+        }));
+        Layouts.Grid sliders = options.add(new Layouts.Grid(170, Theme.SPACE_5));
+        sliders.add(new dev.streamable.ui.kit.Slider("Size", 1, 15, 0.5, () -> mark.sizePercent, v -> {
+            mark.sizePercent = v;
+            s.changed();
+        }).format(v -> String.format(java.util.Locale.ROOT, "%.1f%% of height", v)).defaultValue(3));
+        sliders.add(new dev.streamable.ui.kit.Slider("Opacity", 0.05, 1, 0.05, () -> mark.opacity, v -> {
+            mark.opacity = v;
+            s.changed();
+        }).format(v -> Math.round(v * 100) + "%").defaultValue(0.8));
+        Layouts.Grid where = options.add(new Layouts.Grid(170, Theme.SPACE_5));
+        where.add(Toggle.of("On recordings and clips", () -> mark.onRecording, v -> {
+            mark.onRecording = v;
+            s.changed();
+        }));
+        where.add(Toggle.of("On the stream", () -> mark.onStream, v -> {
+            mark.onStream = v;
+            s.changed();
+        }));
+        options.add(new Label(() -> "Drawn into each output after scaling, so it stays in its corner however an "
+                + "output crops the canvas. Changes apply immediately, even while recording or live. The Home "
+                + "preview shows where it will appear.").color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION).wrap());
+    }
+
+    static String cornerName(VideoSettings.Watermark.Corner corner) {
+        return switch (corner) {
+            case TOP_LEFT -> "Top left";
+            case TOP_RIGHT -> "Top right";
+            case BOTTOM_LEFT -> "Bottom left";
+            case BOTTOM_RIGHT -> "Bottom right";
+        };
     }
 
     private static boolean idle(StreamAbleClient client) {

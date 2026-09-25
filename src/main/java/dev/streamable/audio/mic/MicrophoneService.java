@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class MicrophoneService implements AutoCloseable {
 
-    public enum User { RECORDING, STREAMING, STUDIO }
+    public enum User { RECORDING, STREAMING, REPLAY_BUFFER, STUDIO }
 
     private final MicrophoneSettings settings;
     private final MicrophoneDevices devices = new MicrophoneDevices();
@@ -111,7 +111,8 @@ public final class MicrophoneService implements AutoCloseable {
 
     /** Re-applies everything after a settings change. Cheap when nothing changed. */
     public synchronized void reconcile() {
-        boolean forOutputs = enabled && (users.contains(User.RECORDING) || users.contains(User.STREAMING));
+        boolean forOutputs = enabled && (users.contains(User.RECORDING) || users.contains(User.STREAMING)
+                || users.contains(User.REPLAY_BUFFER));
         boolean wanted = forOutputs || users.contains(User.STUDIO);
         processor.setSendToMixer(forOutputs);
         boolean external = effectiveSource() != MicrophoneSettings.Source.SYSTEM;

@@ -36,6 +36,8 @@ public final class StreamAble implements ClientModInitializer {
     private static KeyMapping pushToTalkKey;
     private static KeyMapping pushToMuteKey;
     private static KeyMapping toggleNoiseBypassKey;
+    private static KeyMapping saveReplayKey;
+    private static KeyMapping toggleReplayBufferKey;
 
     private StreamAbleClient runtime;
 
@@ -47,6 +49,14 @@ public final class StreamAble implements ClientModInitializer {
         registerKeyBindings();
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
+        // Melee kills for automatic clips: remember what the player hits; the
+        // client tick checks whether it dies shortly after. Observation only.
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
+            if (level.isClientSide() && runtime != null) {
+                runtime.noteAttack(entity);
+            }
+            return net.minecraft.world.InteractionResult.PASS;
+        });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             runtime.shutdown();
             runtime.releaseGpuResources();
@@ -78,6 +88,9 @@ public final class StreamAble implements ClientModInitializer {
         pushToTalkKey = register("push_to_talk", GLFW.GLFW_KEY_UNKNOWN);
         pushToMuteKey = register("push_to_mute", GLFW.GLFW_KEY_UNKNOWN);
         toggleNoiseBypassKey = register("toggle_noise_bypass", GLFW.GLFW_KEY_UNKNOWN);
+        // F12 is unused by vanilla and, unlike F4, is not part of an F3 debug chord.
+        saveReplayKey = register("save_replay", GLFW.GLFW_KEY_F12);
+        toggleReplayBufferKey = register("toggle_replay_buffer", GLFW.GLFW_KEY_UNKNOWN);
     }
 
     /**
@@ -102,7 +115,8 @@ public final class StreamAble implements ClientModInitializer {
     /** Every Stream-able key mapping, in display order, for the Studio's shortcut list. */
     public static java.util.List<KeyMapping> keyMappings() {
         return java.util.stream.Stream.of(openStudioKey, toggleSourceEditorKey, toggleHudKey, toggleRecordingKey,
-                toggleStreamingKey, toggleMicMuteKey, pushToTalkKey, pushToMuteKey, toggleNoiseBypassKey)
+                toggleStreamingKey, saveReplayKey, toggleReplayBufferKey, toggleMicMuteKey, pushToTalkKey,
+                pushToMuteKey, toggleNoiseBypassKey)
                 .filter(java.util.Objects::nonNull).toList();
     }
 
@@ -130,6 +144,23 @@ public final class StreamAble implements ClientModInitializer {
                 if (error != null) {
                     StreamAbleLog.STREAMING.warn("Could not start streaming: {}", error);
                 }
+            }
+        }
+        while (saveReplayKey.consumeClick()) {
+            if (runtime.replayBuffer().isRunning()) {
+                runtime.saveReplay("manual");
+            } else {
+                dev.streamable.ui.StreamHud.flash("The replay buffer is off - start it in the Studio.", 0xFFFFC857);
+            }
+        }
+        while (toggleReplayBufferKey.consumeClick()) {
+            if (runtime.replayBuffer().isRunning()) {
+                runtime.stopReplayBuffer();
+                dev.streamable.ui.StreamHud.flash("Replay buffer stopped.", 0xFFA6ADBD);
+            } else {
+                String error = runtime.startReplayBuffer();
+                dev.streamable.ui.StreamHud.flash(error == null ? "Replay buffer started." : error,
+                        error == null ? 0xFF5CC8FF : 0xFFFF5C6C);
             }
         }
         while (openStudioKey.consumeClick()) {

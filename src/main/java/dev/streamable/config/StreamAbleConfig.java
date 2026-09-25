@@ -59,6 +59,14 @@ public final class StreamAbleConfig {
         streaming.validate();
         ui.validate();
         video.validate();
+        // Record-able's watermark fields (imported configs) seed the new watermark once.
+        if (!video.watermark.shows() && video.watermark.text.isBlank() && recording.watermarkText != null
+                && !recording.watermarkText.isBlank()) {
+            video.watermark.text = recording.watermarkText.strip();
+            video.watermark.enabled = recording.watermarkEnabled;
+            recording.watermarkText = "";
+            recording.watermarkEnabled = false;
+        }
         runtime.validate();
         microphone.validate();
         schemaVersion = CURRENT_SCHEMA_VERSION;

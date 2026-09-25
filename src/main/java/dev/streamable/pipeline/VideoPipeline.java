@@ -29,7 +29,12 @@ public final class VideoPipeline implements AutoCloseable {
 
     /** Everything one output needs; immutable for the life of a session. */
     public record OutputConfig(String name, Resolution resolution, ScalingMode mode, int fps,
-                               OutputCapture.Sink sink) {
+                               OutputCapture.Sink sink,
+                               java.util.function.Supplier<dev.streamable.config.VideoSettings.Watermark> watermark) {
+        /** An output without a watermark. */
+        public OutputConfig(String name, Resolution resolution, ScalingMode mode, int fps, OutputCapture.Sink sink) {
+            this(name, resolution, mode, fps, sink, null);
+        }
     }
 
     /** A running output: its config, pacer and GPU capture. */
@@ -44,6 +49,7 @@ public final class VideoPipeline implements AutoCloseable {
             this.config = config;
             this.pacer = new FramePacer(config.fps());
             this.capture = new OutputCapture(config.name(), config.resolution(), maxBuffers);
+            this.capture.setWatermark(config.watermark());
             this.usesStreamCanvas = usesStreamCanvas;
         }
     }
@@ -51,11 +57,14 @@ public final class VideoPipeline implements AutoCloseable {
     private final ProgramCompositor compositor;
     private ActiveOutput recording;
     private ActiveOutput streaming;
+    /** The replay buffer: a recording-like output that encodes into rolling segments. */
+    private ActiveOutput replay;
     private volatile Stats stats = Stats.EMPTY;
     private final RateMeter renderRate = new RateMeter();
     private long previewUntilNanos;
     private ActiveOutput pendingCloseRecording;
     private ActiveOutput pendingCloseStreaming;
+    private ActiveOutput pendingCloseReplay;
 
     public VideoPipeline(ProgramCompositor compositor) {
         this.compositor = compositor;
@@ -77,6 +86,20 @@ public final class VideoPipeline implements AutoCloseable {
                 config.mode().displayName(), config.fps());
     }
 
+    public void startReplayOutput(OutputConfig config) {
+        stopReplayOutput();
+        replay = new ActiveOutput(config, false, 6);
+        StreamAbleLog.COMPOSITOR.info("Replay buffer output: {} {} at {} FPS", config.resolution().label(),
+                config.mode().displayName(), config.fps());
+    }
+
+    public void stopReplayOutput() {
+        if (replay != null) {
+            pendingCloseReplay = replay;
+            replay = null;
+        }
+    }
+
     /** Stops capturing. GL objects are released on the next rendered frame. */
     public void stopRecordingOutput() {
         if (recording != null) {
@@ -93,7 +116,7 @@ public final class VideoPipeline implements AutoCloseable {
     }
 
     public boolean isActive() {
-        return recording != null || streaming != null;
+        return recording != null || streaming != null || replay != null;
     }
 
     /** Keeps the canvas composed for the Studio preview for a short while. */
@@ -128,25 +151,27 @@ public final class VideoPipeline implements AutoCloseable {
         long now = System.nanoTime();
         renderRate.tick(now);
         boolean preview = previewRequested(now);
-        if (recording == null && streaming == null && !preview) {
+        if (recording == null && streaming == null && replay == null && !preview) {
             stats = Stats.EMPTY;
             return;
         }
-        boolean separate = routingsDiffer && recording != null && streaming != null;
+        boolean recordingLike = recording != null || replay != null;
+        boolean separate = routingsDiffer && recordingLike && streaming != null;
         if (!compositor.ensureCanvas(canvas, separate)) {
             return;
         }
 
         int recordingDue = recording == null ? 0 : recording.pacer.framesDue(now);
         int streamingDue = streaming == null ? 0 : streaming.pacer.framesDue(now);
+        int replayDue = replay == null ? 0 : replay.pacer.framesDue(now);
 
         boolean composedMain = false;
         boolean composedStream = false;
         // The main canvas serves the recording and the preview (and the stream
         // too, unless its routing differs).
-        boolean needMain = recordingDue > 0 || preview || (streamingDue > 0 && !separate);
+        boolean needMain = recordingDue > 0 || replayDue > 0 || preview || (streamingDue > 0 && !separate);
         if (needMain) {
-            Predicate<BrowserSource> include = recording != null
+            Predicate<BrowserSource> include = recordingLike
                     ? (separate || streaming == null ? includeRecording : includeRecording.or(includeStream))
                     : includeStream;
             compositor.composeProgramFrame(sources, browsers, include, false, gameScaling, frozen);
@@ -165,6 +190,14 @@ public final class VideoPipeline implements AutoCloseable {
             }
             recording.capture.collect(recording.config.sink());
         }
+        if (replay != null) {
+            if (replayDue > 0 && composedMain) {
+                replay.capture.capture(compositor.quadRenderer(), compositor.programTexture(false),
+                        canvas, replay.config.mode(), replayDue);
+                replay.captureRate.tick(now);
+            }
+            replay.capture.collect(replay.config.sink());
+        }
         if (streaming != null) {
             if (streamingDue > 0 && (composedStream || composedMain)) {
                 streaming.capture.capture(compositor.quadRenderer(), compositor.programTexture(separate),
@@ -174,7 +207,7 @@ public final class VideoPipeline implements AutoCloseable {
             streaming.capture.collect(streaming.config.sink());
         }
         stats = new Stats(canvas, renderRate.perSecond(), compositor.composeMillis(),
-                outputStats(recording), outputStats(streaming), frozen);
+                outputStats(recording), outputStats(streaming), outputStats(replay), frozen);
     }
 
     private static OutputStats outputStats(ActiveOutput output) {
@@ -198,22 +231,27 @@ public final class VideoPipeline implements AutoCloseable {
             pendingCloseStreaming.capture.close();
             pendingCloseStreaming = null;
         }
+        if (pendingCloseReplay != null) {
+            pendingCloseReplay.capture.close();
+            pendingCloseReplay = null;
+        }
     }
 
     @Override
     public void close() {
         stopRecordingOutput();
         stopStreamingOutput();
+        stopReplayOutput();
         closePending();
     }
 
     /** Snapshot of video pipeline health for Stream Health and the Video page. */
     public record Stats(Resolution canvas, double renderFps, double composeMillis,
-                        OutputStats recording, OutputStats streaming, boolean frozen) {
-        public static final Stats EMPTY = new Stats(null, 0, -1, null, null, false);
+                        OutputStats recording, OutputStats streaming, OutputStats replay, boolean frozen) {
+        public static final Stats EMPTY = new Stats(null, 0, -1, null, null, null, false);
 
         public List<OutputStats> outputs() {
-            return java.util.stream.Stream.of(recording, streaming).filter(java.util.Objects::nonNull).toList();
+            return java.util.stream.Stream.of(recording, streaming, replay).filter(java.util.Objects::nonNull).toList();
         }
     }
 
