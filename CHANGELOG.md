@@ -80,9 +80,8 @@ nothing needs to be re-entered.
 
 ### Removed
 - The old Studio, HUD and confirm screens, and the unused legacy microphone
-  capture class. Settings for features that were never implemented (replay buffer,
-  auto-clips, deferred capture, watermark) are kept in the config file for
-  compatibility but are not shown.
+  capture class. Settings for features that are not implemented (kill montages,
+  deferred capture) are kept in the config file for compatibility but are not shown.
 
 ## 1.0.0
 
