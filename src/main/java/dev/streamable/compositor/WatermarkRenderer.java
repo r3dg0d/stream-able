@@ -5,6 +5,8 @@ import dev.streamable.config.VideoSettings;
 import dev.streamable.video.Resolution;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL21;
 import org.lwjgl.system.MemoryUtil;
 
 import java.awt.AlphaComposite;
@@ -85,13 +87,29 @@ final class WatermarkRenderer implements AutoCloseable {
                 texture = GL11.glGenTextures();
             }
             int previous = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+            // Minecraft leaves its own unpack state behind (row length, skips);
+            // a tightly packed upload needs all of it reset.
             int previousAlignment = GL11.glGetInteger(GL11.GL_UNPACK_ALIGNMENT);
+            int previousRowLength = GL11.glGetInteger(GL11.GL_UNPACK_ROW_LENGTH);
+            int previousSkipRows = GL11.glGetInteger(GL11.GL_UNPACK_SKIP_ROWS);
+            int previousSkipPixels = GL11.glGetInteger(GL11.GL_UNPACK_SKIP_PIXELS);
+            int previousUnpackBuffer = GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
             GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4);
+            GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE);
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, h, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, rgba);
             GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, previousAlignment);
+            GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, previousRowLength);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, previousSkipRows);
+            GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, previousSkipPixels);
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, previousUnpackBuffer);
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, previous);
         } finally {
             MemoryUtil.memFree(rgba);
