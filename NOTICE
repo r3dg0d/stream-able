@@ -89,3 +89,9 @@ Optional integration
 --------------------
 Plasmo Voice is supported through its public client API when the player has it
 installed. It is not bundled or downloaded by Stream-able.
+
+Simple Voice Chat (https://github.com/henkelmax/simple-voice-chat) by Max Henkel
+is supported through its public plugin API (de.maxhenkel.voicechat:voicechat-api),
+which Stream-able compiles against but does not bundle. No Simple Voice Chat code
+is included in or downloaded by Stream-able; the mod is used only when the player
+has installed it.

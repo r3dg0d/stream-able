@@ -38,6 +38,15 @@ nothing needs to be re-entered.
 - **Compact stream HUD**, drawn after capture so it never reaches outputs, draggable
   in the canvas editor.
 - Microphone-only audio track for recordings; pause/resume.
+- **Simple Voice Chat support** (2.6+, not bundled): other players' voices on the
+  Voice chat bus with proximity fading, and SVC's microphone as a mic source.
+- **Replay buffer** (F12 to save, up to 10 minutes) and **automatic clips** on
+  death, kills, advancements and dimension changes, saved to `recordings/clips`.
+- **Watermark**: text in any corner, with size and opacity, on recordings and
+  clips, the stream, or both.
+- **Browser-source audio in recordings and streams**, through an in-page tap
+  (JCEF in MCEF has no audio handler); every audio mode and a per-source page
+  volume. Speech synthesis and iframe audio are not captured.
 - Opt-in DSP benchmark (`-Dstreamable.benchmarks=true`).
 
 ### Changed
@@ -50,9 +59,12 @@ nothing needs to be re-entered.
   separately from drops.
 - Output files carry full BT.709 colour tags and square pixels.
 - Audio mixer emits every owed sample after a stall and bounds each bus's backlog.
-- Only the browser-audio modes the embedded JCEF can honour are offered.
 
 ### Fixed
+- Several voice-chat players speaking at once were queued one after another;
+  they are now mixed.
+- CSS, input-shim and script injection on page load never ran, because browsers
+  were looked up by an identifier that is not valid when they are created.
 - The old "use FFmpeg on PATH" setting was only logged; it is now enforced.
 - Recordings could start in containers that cannot hold the chosen codecs (e.g.
   WebM with H.264) and fail at the end; the combination is now checked first.

@@ -63,19 +63,67 @@ frames BT.709 (`setparams`), pins SAR 1:1 and tags the output.
 
 ```
  OpenAL loopback (game) ────────┐
- Plasmo Voice listeners ────────┤    AudioMixer (timer-clocked, 48 kHz stereo s16)
- MicrophoneProcessor output ────┼──> per-bus queues with backlog bounds
- (browser audio: not capturable)┘    emitDue(): mixes what is queued, pads silence
+ voice chat (SVC / Plasmo) ─────┤    AudioMixer (timer-clocked, 48 kHz stereo s16)
+ MicrophoneProcessor output ────┼──> per-bus queues with backlog bounds, plus keyed
+ browser audio tap ─────────────┘    queues per speaker / page stream, summed at mix time
+                                     emitDue(): mixes what is queued, pads silence
                                       │
                                       ├─> recording: program WAV (+ mic-only WAV) → muxed at stop
                                       │   with -itsoffset from measured first-sample times
-                                      └─> streaming: LiveAudioSender (loopback TCP) → FFmpeg
+                                      ├─> streaming: LiveAudioSender (loopback TCP) → FFmpeg
+                                      └─> replay buffer: in-memory ring of timestamped PCM
 ```
+
+Sources that can have several simultaneous talkers (voice chat players, browser
+page streams) submit with a key; each key has its own queue and they are summed
+with saturation, so two people speaking at once overlap instead of playing one
+after the other. Idle keys are dropped after 5 s.
+
+### Voice chat (`compat/`)
+Simple Voice Chat is reached through its plugin API (the `voicechat` entrypoint,
+compile-only dependency): entity and locational voices are faded linearly to zero
+at the voice range from positions cached on the client tick; static (group)
+voices are unfaded. Plasmo Voice uses its client addon API. Either mod's
+microphone can be the mic source, via `MicrophoneRouting`.
+
+### Browser audio (`browser/audio`)
+JCEF in MCEF Modern has no `CefAudioHandler`, so `audio-tap.js` runs inside each
+page. It patches `AudioNode.prototype.connect/disconnect` so anything connected to
+a live destination goes through a per-context hub (volume → monitor gain →
+destination, and volume → ScriptProcessor tap), and gives media elements a
+`MediaElementSource` in the tap's own context. The tap posts base64 16-bit PCM to
+a `CefMessageRouter` query; `BrowserAudioTap.parse` range-checks every field
+(pages are untrusted), `StreamResampler` converts to 48 kHz per stream, and the
+chunk is mixed into the Browser Sources bus keyed by source and stream.
+
+Timing matters: pages wire up audio while they load, so the tap is registered
+with DevTools `Page.addScriptToEvaluateOnNewDocument` (with the Page domain
+enabled). Each browser is created at `about:blank`, and the real URL is loaded
+when the blank page finishes loading and the script is registered (with a
+timeout fallback). JCEF fixes a browser's handlers and message routers at
+creation, so a throwaway browser installs them on MCEF's shared client before
+the first real source.
+
+### Replay buffer (`recording/replay`)
+`ReplayBuffer` runs a third output through FFmpeg's segment muxer: 2 s MPEG-TS
+segments with forced keyframes on every boundary, wrapping after the configured
+length plus a margin, and a CSV list FFmpeg appends as segments close. Audio
+is kept in `ReplayAudioRing`, anchored to wall-clock arrival times. Saving
+copies the newest contiguous run of segments, extracts the matching audio by
+time, and joins them with the concat demuxer (video stream-copied, audio to
+AAC) into `recordings/clips`. `ClipTriggers` turns per-tick observations
+(death edge, a melee target dying within 5 s, an advancement toast, a dimension
+change) into saves 4 s later, with a 10 s cooldown.
+
+### Watermark (`compositor/WatermarkRenderer`)
+The text is rasterised once with Java2D in the bundled Inter font into a
+premultiplied texture and drawn into each output after scaling, so every output
+has it in the same corner.
 
 The microphone:
 
 ```
- device / Plasmo Voice mic ──> ChannelSelector (auto mono detect) ──> resample to 48 kHz
+ device / voice-chat mic ──> ChannelSelector (auto mono detect) ──> resample to 48 kHz
    ──> MicrophoneProcessor queue (64 blocks) ──> DSP worker
          MicrophoneChain: input gain → high-pass → AI noise cancellation → gate/expander
                           → EQ ⇄ (de-esser, compressor) → AGC → limiter → output gain

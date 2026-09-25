@@ -21,9 +21,17 @@ Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-ab
 - Local recording through FFmpeg with hardware encoding (NVIDIA NVENC, Intel Quick Sync, AMD AMF, VA-API) or software x264/x265/VP9/SVT-AV1. **Auto** picks the best encoder that passed a *real test encode* on your machine.
 - MP4, MKV, MOV and WebM, with container/codec combinations validated before recording starts.
 - Constant-quality, VBR or CBR; optional size limit; pause/resume.
-- Game audio, Plasmo Voice, and your processed microphone - optionally on its own track for editing.
+- Game audio, voice chat (Simple Voice Chat or Plasmo Voice), browser-source audio and your processed microphone - optionally on its own track for editing.
 - A/V alignment by measured start offsets, and a timeline that never loses time: when the game renders slower than the output rate, frames are repeated and audio is padded, so a 60 FPS recording is 60 FPS in real time.
 - Files are tagged BT.709 with square pixels, so players display them correctly.
+
+### Replay buffer and clips
+- Keeps the last 10 s to 10 min of gameplay (default 60 s) and saves it on **F12** as an MP4 in `recordings/clips`. It can start by itself whenever you join a world.
+- **Automatic clips** (each optional): your death, a kill you landed, an advancement, a dimension change. A clip is saved 4 s after the moment, so the aftermath is in it, and triggers within 10 s of each other share one clip.
+- Video goes to disk as 2-second segments that overwrite themselves, so the buffer's memory cost is its audio only. Saving copies the segments and joins them without re-encoding the video.
+
+### Watermark
+- Optional text in any corner, with size and opacity, shown on recordings and clips, on the stream, or both. It is drawn into each output after scaling, so it sits in the same corner of a 21:9 recording and a 16:9 crop.
 
 ### Ultrawide and custom resolutions
 - Independent **program canvas**, **recording output** and **streaming output** sizes. Presets for 16:9, 16:10, 21:9 and 32:9, "match game window", and exact custom sizes.
@@ -62,6 +70,7 @@ No audio ever leaves your computer. Stream-able runs open models through ONNX Ru
 - Full interaction in the canvas editor (F7): clicking, scrolling, typing, clipboard shortcuts.
 - Transform box with resize handles and a rotation knob, snapping, and numeric fields.
 - Per-source routing: your screen, the recording, the stream - in any combination.
+- Page audio (alert sounds, music widgets) can reach recordings and the stream, with a per-source volume - see Audio.
 
 ### Stream HUD
 A compact panel (LIVE / REC time, bitrate, encoder FPS, drops, network; detailed mode adds encoder, destinations and a mic meter). It is drawn **after** the frame is captured, so it is only ever on your screen. Drag it anywhere in the canvas editor; its position is remembered as a fraction of the screen. Toggle with F8.
@@ -134,17 +143,31 @@ A stream key is a credential.
 ```
 Game ───────────┐
 Microphone ─────┤ (processed chain)
-Plasmo Voice ───┼──> program mix ──> AAC ──> stream / recording
-Browser audio ──┘   (see limitation below)
+Voice chat ─────┼──> program mix ──> AAC ──> stream / recording / replay buffer
+Browser audio ──┘   (in-page tap, see below)
 ```
 
 The mixer is clocked by time, not by any input: every tick emits exactly the samples elapsed time calls for, so no bus can drift from the video, and a silent input never stalls FFmpeg's muxer.
 
+### Simple Voice Chat (optional)
+With Simple Voice Chat 2.6 or newer installed, Stream-able registers as a voice chat plugin: other players' voices go to the Voice chat bus - fading with distance for proximity voices, as you hear them - and several people talking at once are mixed, not queued. You can also use Simple Voice Chat's microphone as your mic source, optionally still processed by Stream-able's chain. Stream-able only compiles against Simple Voice Chat's public API; the mod is never bundled.
+
 ### Plasmo Voice (optional)
 Plasmo Voice plays through its own OpenAL context, so Stream-able integrates through its client API (`pv-addon-streamable`): other players' voices go to the Plasmo Voice bus, and you can choose Plasmo Voice's already-processed microphone as your mic source. Stream-able warns if you stack aggressive noise suppression on top of Plasmo Voice's own. Plasmo Voice is never bundled.
 
-### Browser audio: a known limitation
-**Browser audio cannot currently be mixed into the broadcast.** CEF has `CefAudioHandler`, but the JCEF build MCEF Modern `0.3.3+mc26.1.jcef146.0.10` ships has no audio handler of any kind, so there is no API to attach to. Page audio plays on your speakers; the Sources page only offers the audio modes that can actually work. Stream-able will not capture your whole desktop to fake it.
+### Browser audio
+The JCEF build MCEF Modern `0.3.3+mc26.1.jcef146.0.10` ships has no `CefAudioHandler`, so Chromium's audio cannot be intercepted natively. Stream-able taps it **inside the page** instead: a small script, registered through DevTools to run before the page's own scripts, routes `<audio>`/`<video>` elements and the page's Web Audio through a Web Audio graph and hands 16-bit PCM to Stream-able over a JCEF message router. Nothing is sent anywhere else. Each source's audio mode is applied in the page:
+
+| Mode | Your speakers | Recording and stream |
+| --- | --- | --- |
+| Off | - | - |
+| Monitor only | yes | - |
+| Recording & stream only | - | yes |
+| Monitor + recording & stream | yes | yes |
+
+Limits: speech synthesis (`speechSynthesis`) and audio inside iframes are not routed through the tap, so they play locally only and are not silenced by "Off" or "Recording & stream only". Latency is about one Web Audio block (~40 ms) plus the mixer's.
+
+Note that MCEF Modern itself starts Chromium with `--disable-web-security` and autoplay without a user gesture. That is why media from other sites can be tapped, and it is also why browser sources should only point at pages you trust.
 
 ---
 
@@ -190,7 +213,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 ## Known issues
 
 - **MCEF issue #4 (Backspace / Enter in off-screen browsers).** Stream-able sends the character events a real keyboard would, through MCEF's public API, plus a self-verifying JavaScript fallback that only acts if the page did not change. See the source for details.
-- **Browser audio does not reach the broadcast** (see Audio).
+- **Browser audio from iframes and speech synthesis is not captured** (see Audio).
 - **Per-destination `tee` reporting is coarse** for destinations sharing an encoder.
 - **Shader mods** replace parts of the render pipeline; Stream-able hooks the tail of `GameRenderer.render`, the most compatible point available, but exotic pipelines may interact badly.
 
@@ -200,8 +223,9 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 What has been checked, and how (Stream-able 1.1.0):
 
-- **Unit and integration tests** (`./gradlew test`, 40 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility.
-- **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters.
+- **Unit and integration tests** (`./gradlew test`, 46 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, and parsing of browser audio chunks.
+- **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters; Simple Voice Chat 2.6.24 loading the plugin and connecting in singleplayer (no second player, so incoming voices were tested by unit tests only); the replay buffer starting on world join and saving a 20 s clip with aligned audio and video; the watermark in a recorded frame; browser-source audio in a recording (a Web Audio tone and an `<audio>` element tone from a test page, both measured in the file).
+- **Not verified at runtime**: automatic clip triggers in a real session (the trigger logic is unit-tested), a browser source's "Recording & stream only" mode being silent on speakers (the test display had no audio device), browser audio on a live stream rather than a recording.
 - **Not verified on real services or hardware**: publishing to Twitch/YouTube/X, Windows, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
 
 ---
@@ -230,11 +254,11 @@ dev/streamable/
   compositor/   program canvas, GPU scaling, PBO readback, game snapshot, local overlay
   pipeline/     per-output frame pacing and capture
   ffmpeg/       discovery, capability probe, command building, processes, progress
-  recording/    recording state machine, audio tracks, muxing
+  recording/    recording state machine, audio tracks, muxing; replay/ replay buffer and clip triggers
   streaming/    destinations, encoder groups, health, reconnect; test/ destination tester
   audio/        buses and mixer; dsp/ chain stages; ai/ noise cancellation; mic/ capture,
                 calibration, presets, test, monitoring
-  browser/      MCEF integration, runtime, input, CSS, audio bridge
+  browser/      MCEF integration, runtime, input, CSS; audio/ in-page audio tap
   source/       source model, z-order; transform/ geometry and the editor
   diagnostics/  Stream Health report, redacted diagnostics
   config/       versioned settings, migration, atomic IO, Record-able import
