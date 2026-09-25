@@ -74,4 +74,51 @@ class AudioMixerTimingTest {
         assertEquals(programBytes.get(), sizes.stream().mapToLong(Integer::longValue).sum(),
                 "the separate track has exactly the program's length");
     }
+
+    @Test
+    void simultaneousSpeakersAreSummedNotQueuedBackToBack() {
+        AudioMixer mixer = new AudioMixer();
+        List<byte[]> blocks = new ArrayList<>();
+        mixer.addSink(blocks::add);
+        mixer.startClockForTesting(0);
+        byte[] alice = constant(960, 1000);   // 20 ms each
+        byte[] bob = constant(960, 2000);
+        mixer.submit(AudioBus.Kind.VOICE_CHAT, "alice", alice, alice.length);
+        mixer.submit(AudioBus.Kind.VOICE_CHAT, "bob", bob, bob.length);
+        assertEquals(2, mixer.keyedSourceCount(AudioBus.Kind.VOICE_CHAT));
+
+        mixer.emitDue(20 * MS);
+        mixer.emitDue(40 * MS);
+        assertEquals(2, blocks.size());
+        byte[] first = blocks.get(0);
+        assertEquals(3000, sampleAt(first, 0), "both voices in the same 20 ms");
+        assertEquals(3000, sampleAt(first, first.length / 2 - 2));
+        assertEquals(0, sampleAt(blocks.get(1), 0), "nothing left over: not played back to back");
+    }
+
+    @Test
+    void summingSaturatesInsteadOfWrapping() {
+        AudioMixer mixer = new AudioMixer();
+        List<byte[]> blocks = new ArrayList<>();
+        mixer.addSink(blocks::add);
+        mixer.startClockForTesting(0);
+        byte[] loud = constant(960, 30_000);
+        mixer.submit(AudioBus.Kind.VOICE_CHAT, 1, loud, loud.length);
+        mixer.submit(AudioBus.Kind.VOICE_CHAT, 2, loud, loud.length);
+        mixer.emitDue(20 * MS);
+        assertEquals(Short.MAX_VALUE, sampleAt(blocks.getFirst(), 0));
+    }
+
+    private static byte[] constant(int frames, int value) {
+        byte[] pcm = new byte[frames * FRAME_BYTES];
+        for (int i = 0; i < pcm.length; i += 2) {
+            pcm[i] = (byte) (value & 0xFF);
+            pcm[i + 1] = (byte) ((value >> 8) & 0xFF);
+        }
+        return pcm;
+    }
+
+    private static int sampleAt(byte[] pcm, int byteOffset) {
+        return (short) ((pcm[byteOffset] & 0xFF) | (pcm[byteOffset + 1] << 8));
+    }
 }

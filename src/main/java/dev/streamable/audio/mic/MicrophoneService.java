@@ -39,11 +39,11 @@ public final class MicrophoneService implements AutoCloseable {
     private final MicrophoneCalibration calibration;
     private final Set<User> users = ConcurrentHashMap.newKeySet();
     private volatile boolean enabled = true;
-    private SincResampler plasmoResampler;
-    private int plasmoRate;
-    private final ChannelSelector plasmoChannels = new ChannelSelector();
-    private float[] plasmoMono = new float[4096];
-    private float[] plasmoResampled = new float[8192];
+    private SincResampler voiceResampler;
+    private int voiceRate;
+    private final ChannelSelector voiceChannels = new ChannelSelector();
+    private float[] voiceMono = new float[4096];
+    private float[] voiceResampled = new float[8192];
 
     public MicrophoneService(AudioMixer mixer, MicrophoneSettings settings, RuntimeManager runtimes) {
         this.settings = settings;
@@ -53,7 +53,7 @@ public final class MicrophoneService implements AutoCloseable {
         this.test = new MicrophoneTest(processor);
         this.monitor = new MicrophoneMonitor(processor);
         this.calibration = new MicrophoneCalibration(processor);
-        MicrophoneRouting.setSink(this::acceptPlasmo);
+        MicrophoneRouting.setSink(this::acceptVoiceChat);
         devices.refreshAsync();
     }
 
@@ -114,16 +114,16 @@ public final class MicrophoneService implements AutoCloseable {
         boolean forOutputs = enabled && (users.contains(User.RECORDING) || users.contains(User.STREAMING));
         boolean wanted = forOutputs || users.contains(User.STUDIO);
         processor.setSendToMixer(forOutputs);
-        boolean plasmo = settings.source == MicrophoneSettings.Source.PLASMO_VOICE;
-        processor.chain().setForcedBypass(plasmo && !settings.processPlasmoVoice);
+        boolean external = effectiveSource() != MicrophoneSettings.Source.SYSTEM;
+        processor.chain().setForcedBypass(external && !settings.processPlasmoVoice);
         noise.apply(settings);
         if (wanted && !processor.isRunning()) {
             processor.start();
         }
-        if (wanted && !plasmo && !input.isRunning()) {
+        if (wanted && !external && !input.isRunning()) {
             input.startAsync(settings);
         }
-        if ((!wanted || plasmo) && input.isRunning()) {
+        if ((!wanted || external) && input.isRunning()) {
             input.stop();
         }
         if (!wanted && processor.isRunning()) {
@@ -146,50 +146,80 @@ public final class MicrophoneService implements AutoCloseable {
         reconcile();
     }
 
-    /** Plasmo Voice's processed microphone, routed through our chain when selected. */
-    private boolean acceptPlasmo(short[] samples, int channels, int sampleRate) {
-        if (settings.source != MicrophoneSettings.Source.PLASMO_VOICE || !processor.isRunning()) {
+    /**
+     * The microphone source actually in use: a voice-chat mod that is selected
+     * but not installed falls back to the system device, so the microphone never
+     * silently disappears.
+     */
+    public MicrophoneSettings.Source effectiveSource() {
+        return switch (settings.source) {
+            case SYSTEM -> MicrophoneSettings.Source.SYSTEM;
+            case PLASMO_VOICE -> dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.isInstalled()
+                    ? MicrophoneSettings.Source.PLASMO_VOICE : MicrophoneSettings.Source.SYSTEM;
+            case SIMPLE_VOICE_CHAT -> dev.streamable.compat.voicechat.SimpleVoiceChatSupport.isInstalled()
+                    ? MicrophoneSettings.Source.SIMPLE_VOICE_CHAT : MicrophoneSettings.Source.SYSTEM;
+        };
+    }
+
+    /** A voice-chat mod's microphone, routed through our chain when it is the selected source. */
+    private boolean acceptVoiceChat(MicrophoneSettings.Source origin, short[] samples, int channels, int sampleRate) {
+        if (origin == MicrophoneSettings.Source.SYSTEM || effectiveSource() != origin || !processor.isRunning()) {
             return false;
         }
         synchronized (this) {
             int frames = samples.length / Math.max(1, channels);
-            if (plasmoMono.length < frames) {
-                plasmoMono = new float[frames];
+            if (voiceMono.length < frames) {
+                voiceMono = new float[frames];
             }
-            int n = plasmoChannels.toMono(samples, frames, channels, MicrophoneSettings.InputChannel.MIX, plasmoMono);
+            int n = voiceChannels.toMono(samples, frames, channels, MicrophoneSettings.InputChannel.MIX, voiceMono);
             if (sampleRate == 48_000) {
-                processor.submit(plasmoMono, 0, n);
+                processor.submit(voiceMono, 0, n);
             } else {
-                if (plasmoResampler == null || plasmoRate != sampleRate) {
-                    plasmoResampler = new SincResampler(sampleRate, 48_000);
-                    plasmoRate = sampleRate;
+                if (voiceResampler == null || voiceRate != sampleRate) {
+                    voiceResampler = new SincResampler(sampleRate, 48_000);
+                    voiceRate = sampleRate;
                 }
-                int needed = plasmoResampler.maxOutput(n) + 4;
-                if (plasmoResampled.length < needed) {
-                    plasmoResampled = new float[needed];
+                int needed = voiceResampler.maxOutput(n) + 4;
+                if (voiceResampled.length < needed) {
+                    voiceResampled = new float[needed];
                 }
-                int out = plasmoResampler.process(plasmoMono, 0, n, plasmoResampled);
-                processor.submit(plasmoResampled, 0, out);
+                int out = voiceResampler.process(voiceMono, 0, n, voiceResampled);
+                processor.submit(voiceResampled, 0, out);
             }
         }
         return true;
     }
 
-    /** A plain-language warning when stacking processing on Plasmo Voice, or {@code null}. */
+    /** A plain-language warning when stacking processing on a voice-chat mod's own, or {@code null}. */
     public String plasmoWarning() {
-        if (settings.source == MicrophoneSettings.Source.PLASMO_VOICE && settings.processPlasmoVoice
+        MicrophoneSettings.Source source = effectiveSource();
+        if (source != MicrophoneSettings.Source.SYSTEM && settings.processPlasmoVoice
                 && settings.noise.level.ordinal() >= MicrophoneSettings.NoiseLevel.BALANCED.ordinal()) {
-            return "This source may already include Plasmo Voice noise processing. Stacking aggressive "
-                    + "suppression can reduce voice quality.";
+            return "This source may already include " + voiceChatName(source) + " noise processing. Stacking "
+                    + "aggressive suppression can reduce voice quality.";
         }
         return null;
     }
 
     public String status() {
-        if (settings.source == MicrophoneSettings.Source.PLASMO_VOICE) {
-            return processor.isRunning() ? "Using the Plasmo Voice microphone." : "Not capturing.";
+        MicrophoneSettings.Source source = effectiveSource();
+        if (source != settings.source) {
+            return voiceChatName(settings.source) + " is not installed; using the microphone device. "
+                    + input.status();
+        }
+        if (source != MicrophoneSettings.Source.SYSTEM) {
+            return processor.isRunning() ? "Using the " + voiceChatName(source) + " microphone (only while you "
+                    + "transmit)." : "Not capturing.";
         }
         return input.status();
+    }
+
+    static String voiceChatName(MicrophoneSettings.Source source) {
+        return switch (source) {
+            case PLASMO_VOICE -> "Plasmo Voice";
+            case SIMPLE_VOICE_CHAT -> "Simple Voice Chat";
+            case SYSTEM -> "The microphone device";
+        };
     }
 
     @Override

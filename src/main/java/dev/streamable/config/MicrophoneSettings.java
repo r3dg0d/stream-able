@@ -22,7 +22,9 @@ public final class MicrophoneSettings {
         /** A capture device opened by Stream-able. */
         SYSTEM,
         /** The microphone signal Plasmo Voice already captured (and may have processed). */
-        PLASMO_VOICE
+        PLASMO_VOICE,
+        /** The microphone signal Simple Voice Chat already captured and processed. */
+        SIMPLE_VOICE_CHAT
     }
 
     public enum NoiseLevel { OFF, LIGHT, BALANCED, STRONG }
@@ -178,7 +180,11 @@ public final class MicrophoneSettings {
     /** Capture device name; blank means the system default. */
     public String device = "";
     public InputChannel inputChannel = InputChannel.AUTO;
-    /** Run Stream-able's chain on the Plasmo Voice signal too. */
+    /**
+     * Run Stream-able's chain on a voice-chat mod's microphone signal too
+     * (Plasmo Voice or Simple Voice Chat). The field keeps its original name so
+     * existing configs load unchanged.
+     */
     public boolean processPlasmoVoice = false;
     /** Digital gain applied first, in dB. Calibration sets this. */
     public double inputGainDb = 0;

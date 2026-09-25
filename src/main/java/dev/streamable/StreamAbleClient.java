@@ -277,6 +277,7 @@ public final class StreamAbleClient {
         // Registration is retried on tick because Plasmo Voice may initialise
         // after us - Fabric does not order client entrypoints.
         tryRegisterVoiceChat();
+        dev.streamable.compat.voicechat.SimpleVoiceChatSupport.attach(audioMixer);
         dev.streamable.browser.audio.BrowserAudioBridge.logCapability();
         initialiseFfmpegAsync();
     }
@@ -325,14 +326,22 @@ public final class StreamAbleClient {
         }
     }
 
-    /** Keeps the voice integration in step with the audio settings. */
+    /** Keeps the voice-chat integrations in step with the audio settings. */
     public void applyVoiceChatSettings() {
-        // Plasmo Voice supplies the microphone only when it is the selected
+        // A voice-chat mod supplies the microphone only when it is the selected
         // source; otherwise the same voice would land in the mix twice.
-        boolean voiceSuppliesMicrophone = config.recording.captureMicrophone
-                && config.microphone.source == dev.streamable.config.MicrophoneSettings.Source.PLASMO_VOICE;
-        dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.configure(
-                config.recording.captureVoiceChat, voiceSuppliesMicrophone);
+        var source = config.recording.captureMicrophone ? microphone.effectiveSource()
+                : dev.streamable.config.MicrophoneSettings.Source.SYSTEM;
+        dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.configure(config.recording.captureVoiceChat,
+                source == dev.streamable.config.MicrophoneSettings.Source.PLASMO_VOICE);
+        dev.streamable.compat.voicechat.SimpleVoiceChatSupport.configure(config.recording.captureVoiceChat,
+                source == dev.streamable.config.MicrophoneSettings.Source.SIMPLE_VOICE_CHAT);
+    }
+
+    /** Whether any supported voice-chat mod is installed. */
+    public static boolean voiceChatInstalled() {
+        return dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.isInstalled()
+                || dev.streamable.compat.voicechat.SimpleVoiceChatSupport.isInstalled();
     }
 
     /** Applies UI settings that other subsystems cache. */
@@ -415,6 +424,7 @@ public final class StreamAbleClient {
     }
 
     public void onClientTick() {
+        dev.streamable.compat.voicechat.SimpleVoiceChatSupport.tick(Minecraft.getInstance());
         if (!dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.isSettled()) {
             tryRegisterVoiceChat();
         }

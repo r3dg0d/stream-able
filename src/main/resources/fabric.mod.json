@@ -20,6 +20,9 @@
   "entrypoints": {
     "client": [
       "dev.streamable.StreamAble"
+    ],
+    "voicechat": [
+      "dev.streamable.compat.voicechat.SimpleVoiceChatPlugin"
     ]
   },
   "mixins": [
@@ -33,7 +36,8 @@
   },
   "suggests": {
     "modmenu": "*",
-    "plasmovoice": ">=2.1.0"
+    "plasmovoice": ">=2.1.0",
+    "voicechat": ">=2.6.0"
   },
   "custom": {
     "streamable:bundled": "MCEF Modern (LGPL-2.1) and XZ for Java (0BSD) are bundled as separate Jar-in-Jar libraries; see NOTICE."

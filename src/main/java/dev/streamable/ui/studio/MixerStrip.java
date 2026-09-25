@@ -42,7 +42,7 @@ final class MixerStrip extends UiNode {
         tooltip(switch (bus.kind()) {
             case GAME -> "Minecraft's own sound, captured from its audio output.";
             case MICROPHONE -> "Your microphone after the processing chain on the Audio page.";
-            case VOICE_CHAT -> "Other players' voices from Plasmo Voice, when installed.";
+            case VOICE_CHAT -> "Other players' voices from Plasmo Voice or Simple Voice Chat, when installed.";
             case BROWSER -> "Browser source audio (limited by the embedded browser; see Sources).";
         });
     }

@@ -9,6 +9,7 @@ import dev.streamable.audio.mic.MicrophonePresets;
 import dev.streamable.audio.mic.MicrophoneService;
 import dev.streamable.audio.mic.MicrophoneTest;
 import dev.streamable.compat.plasmovoice.PlasmoVoiceSupport;
+import dev.streamable.compat.voicechat.SimpleVoiceChatSupport;
 import dev.streamable.config.MicrophoneSettings;
 import dev.streamable.config.MicrophoneSettings.EqBand;
 import dev.streamable.ui.kit.Button;
@@ -94,17 +95,26 @@ final class AudioPage {
 
         Layouts.Grid grid = card.add(new Layouts.Grid(170, Theme.SPACE_5));
         grid.visibleWhen(() -> client.config().recording.captureMicrophone);
+        List<MicrophoneSettings.Source> sources = new ArrayList<>();
+        sources.add(MicrophoneSettings.Source.SYSTEM);
         if (PlasmoVoiceSupport.isInstalled()) {
-            grid.add(s.enumDropdown("Source", MicrophoneSettings.Source.values(),
-                    v -> v == MicrophoneSettings.Source.SYSTEM ? "Microphone device" : "Plasmo Voice microphone",
-                    () -> mic.source, v -> {
-                        mic.source = v;
-                        client.applyVoiceChatSettings();
-                        s.micChanged();
-                    }).tooltip("Use a device directly, or the microphone Plasmo Voice already captures."));
+            sources.add(MicrophoneSettings.Source.PLASMO_VOICE);
+        }
+        if (SimpleVoiceChatSupport.isInstalled()) {
+            sources.add(MicrophoneSettings.Source.SIMPLE_VOICE_CHAT);
+        }
+        if (sources.size() > 1 || mic.source != MicrophoneSettings.Source.SYSTEM) {
+            grid.add(new Dropdown("Source", () -> sources.stream().map(AudioPage::sourceName).toList(),
+                    () -> sources.indexOf(mic.source), i -> {
+                mic.source = sources.get(i);
+                client.applyVoiceChatSettings();
+                s.micChanged();
+            }).placeholder(() -> sourceName(mic.source) + " (not installed)")
+                    .tooltip("Use a device directly, or the microphone a voice-chat mod already captures - then "
+                            + "viewers hear exactly what other players hear, only while you transmit."));
         }
         Layouts.Row device = grid.add(new Layouts.Row(Theme.SPACE_3));
-        device.visibleWhen(() -> mic.source == MicrophoneSettings.Source.SYSTEM);
+        device.visibleWhen(() -> service.effectiveSource() == MicrophoneSettings.Source.SYSTEM);
         device.add(new Dropdown("Device", () -> deviceNames(client), () -> deviceNames(client).indexOf(
                 mic.device.isBlank() ? "System default" : mic.device), i -> {
             mic.device = i == 0 ? "" : deviceNames(client).get(i);
@@ -124,13 +134,12 @@ final class AudioPage {
             mic.inputChannel = v;
             s.micChanged();
         }).tooltip("Audio interfaces often put a single mic on input 1 only. Auto picks the live channel so "
-                + "your voice is never half as loud or on one side.")).visibleWhen(() -> mic.source == MicrophoneSettings.Source.SYSTEM);
-        if (PlasmoVoiceSupport.isInstalled()) {
-            grid.add(Toggle.of("Process the Plasmo Voice signal", () -> mic.processPlasmoVoice, v -> {
-                mic.processPlasmoVoice = v;
-                s.micChanged();
-            })).visibleWhen(() -> mic.source == MicrophoneSettings.Source.PLASMO_VOICE);
-        }
+                + "your voice is never half as loud or on one side.")).visibleWhen(() -> service.effectiveSource() == MicrophoneSettings.Source.SYSTEM);
+        grid.add(Toggle.of("Also process with Stream-able's chain", () -> mic.processPlasmoVoice, v -> {
+            mic.processPlasmoVoice = v;
+            s.micChanged();
+        }).tooltip("The voice-chat mod already processes its microphone; add Stream-able's chain on top.")
+        ).visibleWhen(() -> service.effectiveSource() != MicrophoneSettings.Source.SYSTEM);
         card.add(new Widgets.Notice(service::plasmoWarning, () -> Theme.WARNING));
 
         MicrophoneChain chain = service.processor().chain();
@@ -138,6 +147,14 @@ final class AudioPage {
         meters.visibleWhen(() -> client.config().recording.captureMicrophone);
         meters.add(new Widgets.Meter("Input (raw)", chain::inputLevel, true));
         meters.add(new Widgets.Meter("Output (processed)", chain::outputLevel, true));
+    }
+
+    static String sourceName(MicrophoneSettings.Source source) {
+        return switch (source) {
+            case SYSTEM -> "Microphone device";
+            case PLASMO_VOICE -> "Plasmo Voice microphone";
+            case SIMPLE_VOICE_CHAT -> "Simple Voice Chat microphone";
+        };
     }
 
     private static List<String> deviceNames(StreamAbleClient client) {

@@ -183,7 +183,7 @@ final class HomePage {
         card.add(new Widgets.Caption("Mixer"));
         for (AudioBus bus : client.audioMixer().buses()) {
             if (bus.kind() == AudioBus.Kind.VOICE_CHAT
-                    && !dev.streamable.compat.plasmovoice.PlasmoVoiceSupport.isInstalled()) {
+                    && !StreamAbleClient.voiceChatInstalled()) {
                 continue;
             }
             card.add(new MixerStrip(s, bus));

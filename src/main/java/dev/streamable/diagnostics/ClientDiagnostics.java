@@ -123,6 +123,7 @@ public final class ClientDiagnostics {
                     bus.volume(), bus.muted(), client.audioMixer().trimmedBytes(bus.kind())));
         }
         audio.add("Plasmo Voice: " + PlasmoVoiceSupport.statusLine());
+        audio.add("Simple Voice Chat: " + dev.streamable.compat.voicechat.SimpleVoiceChatSupport.statusLine());
         audio.add("Browser audio: " + BrowserAudioBridge.capability());
         sections.put("Audio", audio);
 

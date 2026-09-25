@@ -17,7 +17,7 @@ public final class AudioBus {
     public enum Kind {
         GAME("Game"),
         MICROPHONE("Microphone"),
-        VOICE_CHAT("Plasmo Voice"),
+        VOICE_CHAT("Voice chat"),
         BROWSER("Browser Sources");
 
         private final String displayName;

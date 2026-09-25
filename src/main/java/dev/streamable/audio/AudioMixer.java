@@ -9,27 +9,28 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * Mixes the input buses into one stereo program stream for the broadcast.
+ * Mixes the input buses into one stereo program stream for recordings and the
+ * broadcast.
  *
  * <pre>
  *   Game ───────────┐
  *   Microphone ─────┤
- *   Plasmo Voice ───┼──&gt; program mix ──&gt; AAC ──&gt; stream
+ *   Voice chat ─────┼──&gt; program mix ──&gt; recording WAV / live AAC
  *   Browser audio ──┘
  * </pre>
  *
- * <p>Local recording keeps Record-able's separate-track behaviour and does not
- * go through this mixer: streams accept a single audio track, recordings do
- * not have to give that up.</p>
- *
  * <h2>Timing</h2>
- * <p>The mixer is clocked by the <em>game</em> bus, which is the only source
- * guaranteed to be continuous (OpenAL loopback renders whether or not anything
- * is audible). Each block of game audio defines a slice of the timeline; other
- * buses contribute whatever they have queued for that slice, and silence
- * otherwise. That keeps the byte count - and therefore FFmpeg's derived
- * timestamps - exactly proportional to elapsed time, which is what prevents the
- * microphone from drifting away from the video over a long session.</p>
+ * <p>The mixer is clocked by wall-clock time, not by any input: every tick
+ * emits exactly the frames elapsed time calls for, mixing in whatever each bus
+ * has queued and padding with silence otherwise, so the byte count - and
+ * FFmpeg's derived timestamps - stay exactly proportional to elapsed time.</p>
+ *
+ * <h2>Several sources on one bus</h2>
+ * <p>Buses such as voice chat carry several independent streams at once (one
+ * per speaking player; one per browser source). Those are submitted with a
+ * key; each key has its own queue and the queues are <em>summed</em> sample by
+ * sample, so two people talking at once are heard together rather than one
+ * after the other.</p>
  */
 public final class AudioMixer {
 
@@ -46,6 +47,10 @@ public final class AudioMixer {
     private final CopyOnWriteArrayList<Consumer<byte[]>> sinks = new CopyOnWriteArrayList<>();
     private final Map<AudioBus.Kind, CopyOnWriteArrayList<Consumer<byte[]>>> busSinks = new EnumMap<>(AudioBus.Kind.class);
     private final Map<AudioBus.Kind, java.util.concurrent.atomic.AtomicLong> trimmedBytes = new EnumMap<>(AudioBus.Kind.class);
+    private final Map<AudioBus.Kind, java.util.concurrent.ConcurrentHashMap<Object, KeyedSource>> keyed =
+            new EnumMap<>(AudioBus.Kind.class);
+    /** A keyed source with nothing queued for this long is forgotten. */
+    static final long KEYED_IDLE_NANOS = 5_000_000_000L;
     private volatile boolean active;
     private Thread clockThread;
     private long startNanos;
@@ -57,6 +62,7 @@ public final class AudioMixer {
             pending.put(kind, new PcmRingBuffer(SAMPLE_RATE * FRAME_BYTES));  // 1 second
             busSinks.put(kind, new CopyOnWriteArrayList<>());
             trimmedBytes.put(kind, new java.util.concurrent.atomic.AtomicLong());
+            keyed.put(kind, new java.util.concurrent.ConcurrentHashMap<>());
         }
     }
 
@@ -136,6 +142,7 @@ public final class AudioMixer {
         }
         buses.values().forEach(AudioBus::reset);
         pending.values().forEach(PcmRingBuffer::clear);
+        keyed.values().forEach(java.util.Map::clear);
         startNanos = System.nanoTime();
         framesEmitted = 0;
         active = true;
@@ -152,6 +159,7 @@ public final class AudioMixer {
             clockThread = null;
         }
         pending.values().forEach(PcmRingBuffer::clear);
+        keyed.values().forEach(java.util.Map::clear);
     }
 
     private void runClock() {
@@ -195,6 +203,7 @@ public final class AudioMixer {
     synchronized void startClockForTesting(long startNanos) {
         buses.values().forEach(AudioBus::reset);
         pending.values().forEach(PcmRingBuffer::clear);
+        keyed.values().forEach(java.util.Map::clear);
         this.startNanos = startNanos;
         framesEmitted = 0;
         active = true;
@@ -208,21 +217,31 @@ public final class AudioMixer {
     private void emitBlock(int byteCount) {
         byte[] mixed = new byte[byteCount];      // starts as silence
         byte[] scratch = new byte[byteCount];
+        long now = System.nanoTime();
         for (AudioBus.Kind kind : AudioBus.Kind.values()) {
             AudioBus bus = buses.get(kind);
             float gain = bus.effectiveGain();
-            PcmRingBuffer buffer = pending.get(kind);
-            int excess = buffer.size() - byteCount - maxBacklogBytes(kind);
-            if (excess > 0) {
-                excess -= excess % FRAME_BYTES;
-                trimmedBytes.get(kind).addAndGet(buffer.discard(excess));
+            byte[] busPcm = new byte[byteCount];
+            int read = drain(kind, pending.get(kind), scratch, byteCount);
+            if (read > 0) {
+                mixInto(busPcm, scratch, read, 1f, true);
             }
-            int read = buffer.read(scratch, byteCount);
+            var sources = keyed.get(kind);
+            for (var entry : sources.entrySet()) {
+                KeyedSource source = entry.getValue();
+                int got = drain(kind, source.buffer, scratch, byteCount);
+                if (got > 0) {
+                    mixInto(busPcm, scratch, got, 1f, false);   // sum, saturating
+                    read = Math.max(read, got);
+                } else if (now - source.lastWriteNanos > KEYED_IDLE_NANOS) {
+                    sources.remove(entry.getKey(), source);
+                }
+            }
             CopyOnWriteArrayList<Consumer<byte[]>> taps = busSinks.get(kind);
             if (!taps.isEmpty()) {
                 byte[] contribution = new byte[byteCount];
                 if (read > 0 && gain > 0) {
-                    mixInto(contribution, scratch, read, gain, true);
+                    mixInto(contribution, busPcm, read, gain, true);
                 }
                 for (Consumer<byte[]> tap : taps) {
                     try {
@@ -235,7 +254,7 @@ public final class AudioMixer {
             if (read <= 0 || gain <= 0) {
                 continue;
             }
-            float peak = mixInto(mixed, scratch, read, gain, false);
+            float peak = mixInto(mixed, busPcm, read, gain, false);
             bus.noteSamples(read / FRAME_BYTES, peak);
         }
         for (Consumer<byte[]> sink : sinks) {
@@ -245,6 +264,16 @@ public final class AudioMixer {
                 StreamAbleLog.AUDIO.warn("Audio sink rejected a block", e);
             }
         }
+    }
+
+    /** Trims a queue to its latency bound, then reads one block from it. */
+    private int drain(AudioBus.Kind kind, PcmRingBuffer buffer, byte[] target, int byteCount) {
+        int excess = buffer.size() - byteCount - maxBacklogBytes(kind);
+        if (excess > 0) {
+            excess -= excess % FRAME_BYTES;
+            trimmedBytes.get(kind).addAndGet(buffer.discard(excess));
+        }
+        return buffer.read(target, byteCount);
     }
 
     public boolean isActive() {
@@ -260,6 +289,23 @@ public final class AudioMixer {
     }
 
     /** Submits a block of game audio. Buffered like any other bus. */
+    /**
+     * Submits audio from one of several simultaneous sources on a bus (a
+     * speaking player, a browser source). Each key is queued separately and the
+     * keys are summed at mix time.
+     */
+    public void submit(AudioBus.Kind kind, Object sourceKey, byte[] pcm, int length) {
+        if (!active || length <= 0) {
+            return;
+        }
+        keyed.get(kind).computeIfAbsent(sourceKey, k -> new KeyedSource()).write(pcm, length, System.nanoTime());
+    }
+
+    /** Number of keyed sources currently known on a bus (diagnostics, tests). */
+    public int keyedSourceCount(AudioBus.Kind kind) {
+        return keyed.get(kind).size();
+    }
+
     public void submitGameAudio(byte[] pcm, int length) {
         submit(AudioBus.Kind.GAME, pcm, length);
     }
@@ -308,6 +354,17 @@ public final class AudioMixer {
                 }
             }
         };
+    }
+
+    /** One keyed stream on a bus. */
+    private static final class KeyedSource {
+        final PcmRingBuffer buffer = new PcmRingBuffer(SAMPLE_RATE * FRAME_BYTES);
+        volatile long lastWriteNanos;
+
+        void write(byte[] pcm, int length, long now) {
+            buffer.write(pcm, length);
+            lastWriteNanos = now;
+        }
     }
 
     /** Fixed-capacity PCM buffer that drops the oldest audio when it overflows. */

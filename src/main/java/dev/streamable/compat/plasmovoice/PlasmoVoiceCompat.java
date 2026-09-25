@@ -116,8 +116,9 @@ public final class PlasmoVoiceCompat implements AddonInitializer {
     /**
      * Another player's decoded voice.
      *
-     * <p>Fires once per audio packet per speaking player; the mixer sums them,
-     * so several people talking at once arrive as several calls.</p>
+     * <p>Fires once per audio packet per speaking player. Each source is
+     * queued separately in the mixer and the sources are summed, so several
+     * people talking at once are heard together.</p>
      */
     @EventSubscribe
     public void onAudioSourceWrite(@NotNull AudioSourceWriteEvent event) {
@@ -129,7 +130,10 @@ public final class PlasmoVoiceCompat implements AddonInitializer {
             if (samples == null || samples.length == 0) {
                 return;
             }
-            submit(AudioBus.Kind.VOICE_CHAT, samples, outputChannels(), outputSampleRate());
+            byte[] pcm = VoicePcmConverter.toMixerFormat(samples, outputChannels(), outputSampleRate());
+            if (pcm.length > 0) {
+                mixer.submit(AudioBus.Kind.VOICE_CHAT, event.getSource(), pcm, pcm.length);
+            }
         } catch (RuntimeException e) {
             // Never let a capture problem disturb voice playback.
             StreamAbleLog.AUDIO.debug("Could not capture incoming voice audio: {}", e.toString());
@@ -150,7 +154,8 @@ public final class PlasmoVoiceCompat implements AddonInitializer {
             }
             // Through Stream-able's microphone chain when it is handling this
             // source; directly to the bus otherwise.
-            if (!dev.streamable.audio.MicrophoneRouting.route(samples, 2, inputSampleRate(event))) {
+            if (!dev.streamable.audio.MicrophoneRouting.route(
+                    dev.streamable.config.MicrophoneSettings.Source.PLASMO_VOICE, samples, 2, inputSampleRate(event))) {
                 submit(AudioBus.Kind.MICROPHONE, samples, 2, inputSampleRate(event));
             }
         } catch (RuntimeException e) {

@@ -1,7 +1,6 @@
 package dev.streamable.ui.studio;
 
 import dev.streamable.StreamAbleClient;
-import dev.streamable.compat.plasmovoice.PlasmoVoiceSupport;
 import dev.streamable.config.RecordingSettings;
 import dev.streamable.ffmpeg.AudioCodec;
 import dev.streamable.ffmpeg.FFmpegCapabilityProbe;
@@ -99,8 +98,8 @@ final class RecordingPage {
             rec.captureGameAudio = v;
             s.changed();
         }));
-        if (PlasmoVoiceSupport.isInstalled()) {
-            sources.add(Toggle.of("Voice chat (Plasmo Voice)", () -> rec.captureVoiceChat, v -> {
+        if (StreamAbleClient.voiceChatInstalled()) {
+            sources.add(Toggle.of("Voice chat (other players)", () -> rec.captureVoiceChat, v -> {
                 rec.captureVoiceChat = v;
                 client.applyVoiceChatSettings();
                 s.changed();
