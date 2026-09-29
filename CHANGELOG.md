@@ -4,6 +4,13 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Improved
+- **Stream HUD mic DSP badge**: when the microphone queue is under pressure
+  (same thresholds as Stream Health), the compact HUD shows a `MIC DSP`
+  warning pill, or `MIC DROP` when blocks were discarded. Detailed mode's
+  mic meter caption matches. Audio and Health pages already covered this; the
+  HUD now surfaces it without opening Studio.
+
 ## 1.3.1 - 2026-09-29
 
 Recording, capture, browser, and mic health (cycles 12–15) on Minecraft 26.2.

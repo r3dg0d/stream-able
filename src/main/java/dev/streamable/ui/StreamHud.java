@@ -26,8 +26,10 @@ import java.util.Locale;
 /**
  * The compact stream HUD: a small panel on the player's own screen showing
  * LIVE / REC state and, while live, bitrate, encoder FPS, dropped frames and
- * the network condition. Detailed mode adds the encoder, each destination and
- * a microphone meter.
+ * the network condition. Microphone DSP overload surfaces as a {@code MIC DSP}
+ * / {@code MIC DROP} pill even in compact mode (same thresholds as Stream
+ * Health). Detailed mode adds the encoder, each destination and a microphone
+ * meter.
  *
  * <p>It never reaches recordings or streams. Minecraft's own HUD is drawn
  * before Stream-able captures the frame, so a normal HUD element would be
@@ -208,7 +210,7 @@ public final class StreamHud {
         }
     }
 
-    private record MicMeter(LevelMeter.Reading reading, boolean muted) implements Row {
+    private record MicMeter(LevelMeter.Reading reading, boolean muted, MicHudBadge.Badge badge) implements Row {
         @Override
         public int width(Painter p) {
             return 90;
@@ -221,9 +223,12 @@ public final class StreamHud {
 
         @Override
         public void draw(Painter p, int x, int y, int width) {
-            p.text(muted ? "MIC MUTED" : "MIC", x, y, muted ? Theme.DANGER : Theme.TEXT_MUTED, 0.65f, Painter.Weight.SEMIBOLD);
-            int bx = x + (muted ? 44 : 18);
-            int bw = width - (bx - x);
+            String caption = MicHudBadge.meterCaption(muted, badge);
+            int captionColor = muted || badge.level() == MicHudBadge.Level.CRITICAL ? Theme.DANGER
+                    : badge.level() == MicHudBadge.Level.WARNING ? Theme.WARNING : Theme.TEXT_MUTED;
+            p.text(caption, x, y, captionColor, 0.65f, Painter.Weight.SEMIBOLD);
+            int bx = x + p.textWidth(caption, 0.65f, Painter.Weight.SEMIBOLD) + 4;
+            int bw = Math.max(12, width - (bx - x));
             p.roundRect(bx, y + 1, bw, 4, 2, 0xFF1E2230);
             double db = reading.peakDb();
             float f = (float) Math.clamp((db + 60) / 60.0, 0, 1);
@@ -250,6 +255,11 @@ public final class StreamHud {
         if (client.replayBuffer().isRunning()) {
             labels.add("REPLAY " + Studio.clock(client.replayBuffer().configuredSeconds() * 1000L));
             colors.add(Theme.INFO);
+        }
+        MicHudBadge.Badge micBadge = micBadge(client);
+        if (micBadge.present()) {
+            labels.add(micBadge.label());
+            colors.add(micBadge.level() == MicHudBadge.Level.CRITICAL ? Theme.DANGER : Theme.WARNING);
         }
         if (labels.isEmpty()) {
             labels.add(editing ? "HUD - drag to move" : "Idle");
@@ -284,8 +294,18 @@ public final class StreamHud {
         if (client.config().recording.captureMicrophone) {
             LevelMeter.Reading reading = client.microphone().isCapturing()
                     ? client.microphone().processor().chain().outputLevel() : LevelMeter.Reading.SILENT;
-            rows.add(new MicMeter(reading, client.config().microphone.muted));
+            rows.add(new MicMeter(reading, client.config().microphone.muted, micBadge));
         }
         return rows;
+    }
+
+    /** Live mic DSP badge for the HUD; absent when capture is off or the queue is healthy. */
+    private static MicHudBadge.Badge micBadge(StreamAbleClient client) {
+        if (!client.config().recording.captureMicrophone) {
+            return MicHudBadge.Badge.ABSENT;
+        }
+        boolean capturing = client.microphone().isCapturing();
+        return MicHudBadge.of(true, capturing,
+                capturing ? client.microphone().processor().stats() : null);
     }
 }

@@ -182,7 +182,9 @@ falls far behind (more than 25 blocks), the stalest blocks are dropped and count
 so latency cannot grow without bound. The mixer clock is never slowed by the microphone.
 Stream Health lists DSP time, queue backlog, overruns and drops while the mic is
 capturing; an overload finding names those counts and points at Studio → Audio
-(lighter noise model / lower strength). Dropped audio is CRITICAL.
+(lighter noise model / lower strength). Dropped audio is CRITICAL. The Stream HUD
+surfaces the same pressure as a compact `MIC DSP` / `MIC DROP` pill (`ui/MicHudBadge`)
+even when detailed HUD mode is off.
 
 ### Noise cancellation (`audio/ai`)
 
