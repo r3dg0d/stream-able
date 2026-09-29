@@ -26,7 +26,8 @@ import java.util.Locale;
 /**
  * The compact stream HUD: a small panel on the player's own screen showing
  * LIVE / REC state and, while live, bitrate, encoder FPS, dropped frames and
- * the network condition. Microphone DSP overload surfaces as a {@code MIC DSP}
+ * the network condition. The replay buffer shows fill percent ({@code REPLAY
+ * N%} / {@code SAVING}); microphone DSP overload surfaces as a {@code MIC DSP}
  * / {@code MIC DROP} pill even in compact mode (same thresholds as Stream
  * Health). Detailed mode adds the encoder, each destination and a microphone
  * meter.
@@ -252,9 +253,11 @@ public final class StreamHud {
             labels.add("REC " + Studio.clock(client.recording().elapsedMillis()));
             colors.add(Theme.RECORDING);
         }
-        if (client.replayBuffer().isRunning()) {
-            labels.add("REPLAY " + Studio.clock(client.replayBuffer().configuredSeconds() * 1000L));
-            colors.add(Theme.INFO);
+        ReplayHudBadge.Badge replayBadge = replayBadge(client);
+        if (replayBadge.present()) {
+            labels.add(replayBadge.label());
+            colors.add(replayBadge.level() == ReplayHudBadge.Level.SAVING ? Theme.WARNING
+                    : replayBadge.level() == ReplayHudBadge.Level.FULL ? Theme.SUCCESS : Theme.INFO);
         }
         MicHudBadge.Badge micBadge = micBadge(client);
         if (micBadge.present()) {
@@ -307,5 +310,14 @@ public final class StreamHud {
         boolean capturing = client.microphone().isCapturing();
         return MicHudBadge.of(true, capturing,
                 capturing ? client.microphone().processor().stats() : null);
+    }
+
+    /** Replay fill / saving badge; absent when the buffer is off. */
+    private static ReplayHudBadge.Badge replayBadge(StreamAbleClient client) {
+        var buffer = client.replayBuffer();
+        if (!buffer.isRunning()) {
+            return ReplayHudBadge.Badge.ABSENT;
+        }
+        return ReplayHudBadge.of(true, buffer.isSaving(), buffer.bufferedSeconds(), buffer.configuredSeconds());
     }
 }

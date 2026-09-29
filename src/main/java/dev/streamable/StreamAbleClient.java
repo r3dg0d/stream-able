@@ -705,6 +705,9 @@ public final class StreamAbleClient {
      * The result is announced on the stream HUD (never in outputs).
      */
     public java.util.concurrent.CompletableFuture<Path> saveReplay(String reason) {
+        // Announce immediately so F12 / auto-clip feels responsive; the result
+        // flash below replaces this once the mux finishes (or fails).
+        dev.streamable.ui.StreamHud.flash("Saving clip…", 0xFFFFC857);
         java.util.concurrent.CompletableFuture<Path> saving = replayBuffer.save(reason, config.recording.replayBufferSeconds,
                 replayBuffer.clipsDirectory(recording.outputDirectory(config.recording)),
                 new dev.streamable.ffmpeg.AudioProfile(config.recording.audioCodec, config.recording.audioBitrateKbps,

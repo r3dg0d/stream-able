@@ -107,6 +107,24 @@ class ConfigIoTest {
     }
 
     @Test
+    void validationRestoresFiniteHudAndOverlayDefaultsFromNaN() {
+        StreamAbleConfig config = new StreamAbleConfig();
+        config.ui.streamHudScale = Float.NaN;
+        config.ui.streamHudOpacity = Float.NaN;
+        config.ui.snapThreshold = Double.NaN;
+        config.recording.overlayScale = Float.NaN;
+        config.validate();
+
+        assertEquals(1.0f, config.ui.streamHudScale, 1e-6);
+        assertEquals(0.85f, config.ui.streamHudOpacity, 1e-6);
+        assertEquals(8.0, config.ui.snapThreshold, 1e-9);
+        assertEquals(1.0f, config.recording.overlayScale, 1e-6);
+        assertTrue(Float.isFinite(config.ui.streamHudScale));
+        assertTrue(Float.isFinite(config.ui.streamHudOpacity));
+        assertTrue(Double.isFinite(config.ui.snapThreshold));
+    }
+
+    @Test
     void constantQualityIsRejectedForLiveOutput() {
         StreamAbleConfig config = new StreamAbleConfig();
         config.streaming.rateControl = dev.streamable.ffmpeg.RateControl.CONSTANT_QUALITY;

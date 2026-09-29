@@ -5,6 +5,14 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Improved
+- **Stream HUD replay fill-%**: the compact `REPLAY` pill shows how full the
+  buffer is (`REPLAY 42%` while filling, `REPLAY 100%` when ready, `SAVING`
+  while a clip is muxing). Saving a clip flashes `Saving clip…` immediately,
+  then the result. Pure `ReplayHudBadge` helper matches Studio's buffered /
+  configured seconds.
+- **Config NaN hardening**: hostile `streamHudScale` / `streamHudOpacity` /
+  `snapThreshold` / `overlayScale` values that are NaN reset to defaults
+  before clamping (Math.clamp alone leaves NaN intact).
 - **Stream HUD mic DSP badge**: when the microphone queue is under pressure
   (same thresholds as Stream Health), the compact HUD shows a `MIC DSP`
   warning pill, or `MIC DROP` when blocks were discarded. Detailed mode's

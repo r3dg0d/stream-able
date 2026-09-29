@@ -26,7 +26,15 @@ public final class InterfaceSettings {
 
     public void validate() {
         streamHudPosition = Math.clamp(streamHudPosition, 0, 3);
+        // NaN survives Math.clamp; restore defaults before clamping so a hostile
+        // JSON edit cannot leave the HUD at an unusable scale or opacity.
+        if (!Float.isFinite(streamHudScale)) {
+            streamHudScale = 1.0f;
+        }
         streamHudScale = (float) Math.clamp(streamHudScale, 0.5, 3.0);
+        if (!Float.isFinite(streamHudOpacity)) {
+            streamHudOpacity = 0.85f;
+        }
         streamHudOpacity = (float) Math.clamp(streamHudOpacity, 0.1, 1.0);
         if (!Float.isFinite(streamHudX) || streamHudX > 1) {
             streamHudX = -1;
@@ -36,6 +44,9 @@ public final class InterfaceSettings {
         }
         canvasWidth = Math.clamp(canvasWidth - (canvasWidth % 2), 320, 16384);
         canvasHeight = Math.clamp(canvasHeight - (canvasHeight % 2), 240, 16384);
+        if (!Double.isFinite(snapThreshold)) {
+            snapThreshold = 8.0;
+        }
         snapThreshold = Math.clamp(snapThreshold, 0.0, 64.0);
     }
 }

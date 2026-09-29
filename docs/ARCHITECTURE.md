@@ -158,7 +158,9 @@ copies the newest contiguous run of segments, extracts the matching audio by
 time, and joins them with the concat demuxer (video stream-copied, audio to
 AAC) into `recordings/clips`. `ClipTriggers` turns per-tick observations
 (death edge, a melee target dying within 5 s, an advancement toast, a dimension
-change) into saves 4 s later, with a 10 s cooldown.
+change) into saves 4 s later, with a 10 s cooldown. The Stream HUD shows fill
+percent via `ui/ReplayHudBadge` (`REPLAY N%` / `REPLAY 100%` / `SAVING`) from
+`bufferedSeconds()` vs `configuredSeconds()`, and flashes on save start/result.
 
 ### Watermark (`compositor/WatermarkRenderer`)
 The text is rasterised once with Java2D in the bundled Inter font into a

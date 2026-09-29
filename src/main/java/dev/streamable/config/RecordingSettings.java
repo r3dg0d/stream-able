@@ -143,6 +143,9 @@ public final class RecordingSettings {
         replayBufferSeconds = Math.clamp(replayBufferSeconds, 5, 600);
         deferredCaptureFps = Math.clamp(deferredCaptureFps, 1, 60);
         deferredOutputFps = Math.clamp(deferredOutputFps, 15, 240);
+        if (!Float.isFinite(overlayScale)) {
+            overlayScale = 1.0f;
+        }
         overlayScale = (float) Math.clamp(overlayScale, 0.5, 2.0);
         overlayPosition = Math.clamp(overlayPosition, 0, 4);
         maxFileSizeMb = Math.max(0, maxFileSizeMb);
