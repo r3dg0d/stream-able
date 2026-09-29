@@ -75,4 +75,17 @@ class TeeRecoveryTest {
         stranger.setState(DestinationState.ERROR);
         assertFalse(TeeRecovery.shouldSplitOff(stranger, List.of(live)));
     }
+
+    @Test
+    @DisplayName("does not split a destination the user disabled")
+    void doesNotSplitDisabledTarget() {
+        StreamDestination failed = destination("YouTube");
+        StreamDestination live = destination("Twitch");
+        failed.setState(DestinationState.ERROR);
+        live.setState(DestinationState.LIVE);
+        failed.setEnabled(false);
+
+        assertFalse(TeeRecovery.shouldSplitOff(failed, List.of(failed, live)));
+        assertEquals(DestinationState.DISABLED, failed.state());
+    }
 }

@@ -23,11 +23,15 @@ public final class TeeRecovery {
     }
 
     /**
-     * True when {@code target} failed (or is waiting to recover) inside a shared
-     * tee while at least one sibling is still publishing.
+     * True when {@code target} is still enabled, failed (or is waiting to recover)
+     * inside a shared tee, and at least one sibling is still publishing.
      */
     public static boolean shouldSplitOff(StreamDestination target, List<StreamDestination> siblings) {
         if (target == null || siblings == null || siblings.size() < 2) {
+            return false;
+        }
+        // Disabled rows must not be split onto a new encoder (user took them offline).
+        if (!target.enabled()) {
             return false;
         }
         DestinationState state = target.state();

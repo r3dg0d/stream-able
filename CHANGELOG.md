@@ -4,7 +4,19 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.3.0 - 2026-09-29
+
+Streaming reliability (cycles 4–11) on Minecraft 26.2.
+
 ### Improved
+- **Tee recovery cancel / exhaust**: Destinations → Disable cancels a pending
+  automatic dedicated-encoder recovery so `tick()` will not split a user-disabled
+  row. Ineligible schedules (disabled target, or no LIVE sibling left) are dropped
+  instead of sticking forever; RECONNECTING rows without a healthy sibling fall
+  back to ERROR with a clear message. Exhausted `ReconnectPolicy.maxAttempts`
+  writes a user-facing ERROR instead of leaving the prior FFmpeg line alone.
+- **TeeRecovery refuses disabled targets**: `shouldSplitOff` requires
+  `destination.enabled()` so a DISABLED row cannot be split onto a new encoder.
 - **Automatic tee slave recovery**: a mid-stream failed tee row is scheduled for
   recovery on a dedicated encoder using the session reconnect backoff (healthy
   siblings stay on the shared process). Destinations → Reconnect still splits

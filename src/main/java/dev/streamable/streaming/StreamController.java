@@ -333,6 +333,9 @@ public final class StreamController {
         for (StreamEncoderGroup group : groups) {
             for (StreamDestination destination : group.destinations()) {
                 if (destination.id().equals(destinationId)) {
+                    // Cancel any pending auto tee recovery before flipping DISABLED
+                    // so tick() does not split the row onto a dedicated encoder.
+                    group.cancelTeeRecovery(destinationId);
                     destination.setEnabled(false);
                     // A destination inside a shared tee cannot be removed from a
                     // running FFmpeg process, so only a group it owns alone is

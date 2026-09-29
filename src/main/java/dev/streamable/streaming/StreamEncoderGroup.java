@@ -306,6 +306,9 @@ public final class StreamEncoderGroup implements AutoCloseable {
             }
             int soFar = teeRecoveryAttempts.getOrDefault(id, 0);
             if (!reconnectPolicy.shouldRetry(soFar)) {
+                destination.setLastError(
+                        "Ingest failed and dedicated-encoder recovery is exhausted after "
+                                + soFar + " attempt(s). Use Destinations → Reconnect to try again.");
                 StreamAbleLog.STREAMING.error(
                         "Tee slave recovery exhausted for {} after {} attempt(s)",
                         destination.name(), soFar);
@@ -341,27 +344,61 @@ public final class StreamEncoderGroup implements AutoCloseable {
             return List.of();
         }
         List<UUID> ready = new ArrayList<>();
+        List<UUID> cancel = new ArrayList<>();
         for (Map.Entry<UUID, Long> entry : teeRecoveryAtMillis.entrySet()) {
+            UUID id = entry.getKey();
+            StreamDestination target = destinationById(id);
+            // Drop schedules the user cancelled (disabled) or that are no longer
+            // eligible to split (sibling gone, state changed) so they do not stick.
+            if (!TeeRecovery.shouldSplitOff(target, group.destinations())) {
+                cancel.add(id);
+                if (target != null
+                        && target.enabled()
+                        && target.state() == DestinationState.RECONNECTING) {
+                    target.setState(DestinationState.ERROR);
+                    target.setLastError(
+                            "Ingest failed. Automatic dedicated-encoder recovery cancelled "
+                                    + "(no healthy sibling left on the shared tee). "
+                                    + "Use Destinations → Reconnect.");
+                }
+                continue;
+            }
             Long at = entry.getValue();
             if (at == null || at <= 0 || nowMillis < at) {
                 continue;
             }
-            UUID id = entry.getKey();
-            StreamDestination target = null;
-            for (StreamDestination destination : group.destinations()) {
-                if (destination.id().equals(id)) {
-                    target = destination;
-                    break;
-                }
-            }
-            if (TeeRecovery.shouldSplitOff(target, group.destinations())) {
-                ready.add(id);
-            }
+            ready.add(id);
+        }
+        for (UUID id : cancel) {
+            cancelTeeRecovery(id);
         }
         for (UUID id : ready) {
             teeRecoveryAtMillis.remove(id);
         }
         return List.copyOf(ready);
+    }
+
+    /**
+     * Cancels a pending automatic tee recovery for {@code destinationId} without
+     * changing destination state (caller may already have set DISABLED / ERROR).
+     */
+    public boolean cancelTeeRecovery(UUID destinationId) {
+        if (destinationId == null) {
+            return false;
+        }
+        boolean removed = teeRecoveryAtMillis.remove(destinationId) != null;
+        // Keep attempt counters so a later re-enable still respects maxAttempts
+        // for this session; restart()/start() clear them for a fresh session.
+        return removed;
+    }
+
+    private StreamDestination destinationById(UUID id) {
+        for (StreamDestination destination : group.destinations()) {
+            if (destination.id().equals(id)) {
+                return destination;
+            }
+        }
+        return null;
     }
 
     /**

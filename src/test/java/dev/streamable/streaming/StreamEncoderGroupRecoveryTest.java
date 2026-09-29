@@ -151,4 +151,79 @@ class StreamEncoderGroupRecoveryTest {
         assertEquals(List.of(youtube), solo.destinations());
         assertEquals(List.of(twitch), shared.destinations());
     }
+
+    @Test
+    @DisplayName("exhausted tee recovery attempts leave a clear ERROR message")
+    void exhaustedAttemptsLeaveClearError() {
+        StreamDestination twitch = destination("Twitch", "rtmp://twitch/app");
+        StreamDestination youtube = destination("YouTube", "rtmps://youtube/live2");
+        twitch.setState(DestinationState.LIVE);
+        youtube.setState(DestinationState.LIVE);
+        ReconnectPolicy policy = new ReconnectPolicy(true, 1_000L, 1_000L, 2.0, 2);
+        StreamEncoderGroup shared = groupOf(policy, twitch, youtube);
+
+        long now = 10_000L;
+        shared.noteTeeSlaveFailures("Error opening output url rtmps://youtube/live2: I/O error");
+        shared.scheduleTeeRecoveries(now);
+        assertEquals(DestinationState.RECONNECTING, youtube.state());
+        assertEquals(List.of(youtube.id()), shared.pollReadyTeeRecoveries(now + 1_000L));
+
+        // Simulate another mid-stream fail after the first recovery attempt was consumed.
+        youtube.setState(DestinationState.ERROR);
+        shared.noteTeeSlaveFailures("Error opening output url rtmps://youtube/live2: I/O error");
+        shared.scheduleTeeRecoveries(now + 2_000L);
+        assertEquals(DestinationState.RECONNECTING, youtube.state());
+        assertEquals(List.of(youtube.id()), shared.pollReadyTeeRecoveries(now + 3_000L));
+
+        youtube.setState(DestinationState.ERROR);
+        shared.noteTeeSlaveFailures("Error opening output url rtmps://youtube/live2: I/O error");
+        shared.scheduleTeeRecoveries(now + 4_000L);
+        assertEquals(DestinationState.ERROR, youtube.state());
+        assertTrue(youtube.lastError().toLowerCase().contains("exhausted"));
+        assertTrue(shared.pollReadyTeeRecoveries(now + 60_000L).isEmpty());
+    }
+
+    @Test
+    @DisplayName("disabling a scheduled recovery cancels it and does not split later")
+    void disableCancelsPendingRecovery() {
+        StreamDestination twitch = destination("Twitch", "rtmp://twitch/app");
+        StreamDestination youtube = destination("YouTube", "rtmps://youtube/live2");
+        twitch.setState(DestinationState.LIVE);
+        youtube.setState(DestinationState.LIVE);
+        StreamEncoderGroup shared = groupOf(twitch, youtube);
+
+        long now = 50_000L;
+        shared.noteTeeSlaveFailures("Error opening output url rtmps://youtube/live2: I/O error");
+        shared.scheduleTeeRecoveries(now);
+        assertEquals(DestinationState.RECONNECTING, youtube.state());
+
+        assertTrue(shared.cancelTeeRecovery(youtube.id()));
+        youtube.setEnabled(false);
+        assertEquals(DestinationState.DISABLED, youtube.state());
+        assertTrue(shared.pollReadyTeeRecoveries(now + 60_000L).isEmpty());
+        assertNull(shared.splitOffForRecovery(youtube.id()));
+        assertEquals(2, shared.destinations().size());
+    }
+
+    @Test
+    @DisplayName("poll drops ineligible schedules and reverts RECONNECTING when no LIVE sibling")
+    void pollCancelsWhenNoLiveSibling() {
+        StreamDestination a = destination("A", "rtmp://a/app");
+        StreamDestination b = destination("B", "rtmp://b/app");
+        a.setState(DestinationState.LIVE);
+        b.setState(DestinationState.LIVE);
+        StreamEncoderGroup shared = groupOf(a, b);
+
+        long now = 80_000L;
+        shared.noteTeeSlaveFailures("Error opening output url rtmp://b/app: I/O error");
+        shared.scheduleTeeRecoveries(now);
+        assertEquals(DestinationState.RECONNECTING, b.state());
+
+        // Sibling also dies before the backoff elapses.
+        a.setState(DestinationState.ERROR);
+        assertTrue(shared.pollReadyTeeRecoveries(now + 60_000L).isEmpty());
+        assertEquals(DestinationState.ERROR, b.state());
+        assertTrue(b.lastError().toLowerCase().contains("cancelled")
+                || b.lastError().toLowerCase().contains("no healthy sibling"));
+    }
 }

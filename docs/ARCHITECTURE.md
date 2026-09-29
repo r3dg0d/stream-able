@@ -67,7 +67,9 @@ group as a unit (`StreamEncoderGroup` + `ReconnectPolicy`). Failed tee rows are
 scheduled for dedicated-encoder recovery on the same reconnect backoff
 (`StreamEncoderGroup.scheduleTeeRecoveries` → `StreamController.tick` →
 `reconnectDestination` + `TeeRecovery`); Destinations → Reconnect splits
-immediately. Healthy siblings are not restarted. `diagnostics/HealthReport` turns
+immediately. Destinations → Disable cancels a pending schedule; exhausted
+retries and ineligible schedules (disabled / no LIVE sibling) surface as
+ERROR with a clear message. Healthy siblings are not restarted. `diagnostics/HealthReport` turns
 those ERROR / RECONNECTING rows into Stream Health findings and Fair/Poor network
 condition so a partial tee drop is never reported as "Everything is running
 smoothly."
