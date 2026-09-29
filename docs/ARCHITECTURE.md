@@ -181,3 +181,22 @@ are written atomically and are `chmod 600` on POSIX when they contain a stream k
 - `studio/`: the Studio shell and one builder per page. Controls bind directly to
   the config objects and live runtime state.
 - `StreamHud`, `SourceEditorScreen`: the HUD and the canvas editor.
+
+## Minecraft 26.2 call sites
+
+Stream-able 1.2.0 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
+surfaces changed relative to 26.1.x; the live code goes through these helpers
+so the rest of the tree stays readable:
+
+| Area | 26.2 surface | Where |
+| --- | --- | --- |
+| Texture / GPU formats | `GpuFormat.RGBA8_UNORM` (was `TextureFormat.RGBA8`) | `compositor/ProgramTarget`, `ui/kit/UiPipelines` |
+| Program capture | `Minecraft.gameRenderer.mainRenderTarget()` | capture / compositor |
+| Screens and F1 HUD | `util/ClientGui` → `Minecraft.gui.screen()` / `setScreen()` / `gui.hud.isHidden()` | Studio, HUD, hotkeys |
+| Rounded-rect pipeline | `VertexFormat` + `GpuFormat` attributes, `withVertexBinding`, `PrimitiveTopology.QUADS` | `ui/kit/UiPipelines` |
+| Stream HUD second pass | `GuiRenderer.render()` with no fog buffer | `ui/StreamHud` |
+
+Loom 1.17.21; Minecraft 26.x ships deobfuscated (mojmap), so there is no
+Yarn layer and no `remapJar` task. The release jar is named
+`stream-able-<ver>-mc26.2-fabric.jar`.
+

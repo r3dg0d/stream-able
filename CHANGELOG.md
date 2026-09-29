@@ -4,6 +4,22 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Added
+- **Windows CI matrix**: GitHub Actions runs Temurin 25 `./gradlew test` and
+  `build` on `ubuntu-latest` and `windows-latest` (jar artifact still uploaded
+  from Linux). Version-sync also checks `minecraft_version` against CHANGELOG
+  and the README requirements / jar-name lines.
+- Curated GitHub issues for known gaps: [#1](https://github.com/r3dg0d/stream-able/issues/1)
+  iframe / speechSynthesis browser audio,
+  [#2](https://github.com/r3dg0d/stream-able/issues/2) live Twitch/YouTube/X publish
+  verification, [#3](https://github.com/r3dg0d/stream-able/issues/3) Windows client smoke.
+
+### Changed
+- Native-runtime thread stacks size from `ProcessHandle` command-line length
+  when `/proc/self/cmdline` is unavailable (Windows launchers), still floored
+  at 64 MB.
+- `docs/ARCHITECTURE.md` documents the Minecraft 26.2 render/GUI call sites.
+
 ## 1.2.0 - 2026-09-29
 
 Port to Minecraft 26.2 and polish.

@@ -223,12 +223,13 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 ## Verification status
 
-What has been checked, and how (Stream-able 1.1.0):
+What has been checked, and how (Stream-able **1.2.0** on Minecraft **26.2**):
 
 - **Unit and integration tests** (`./gradlew test`, 46 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, and parsing of browser audio chunks.
 - **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters; Simple Voice Chat 2.6.24 loading the plugin and connecting in singleplayer (no second player, so incoming voices were tested by unit tests only); the replay buffer starting on world join and saving a 20 s clip with aligned audio and video; the watermark in a recorded frame; browser-source audio in a recording (a Web Audio tone and an `<audio>` element tone from a test page, both measured in the file).
 - **Not verified at runtime**: automatic clip triggers in a real session (the trigger logic is unit-tested), a browser source's "Recording & stream only" mode being silent on speakers (the test display had no audio device), browser audio on a live stream rather than a recording.
-- **Not verified on real services or hardware**: publishing to Twitch/YouTube/X, Windows, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
+- **CI on Windows**: unit/integration tests and jar build run on `windows-latest` (Temurin 25). A live Windows Minecraft client session is still unverified.
+- **Not verified on real services or hardware**: publishing to Twitch/YouTube/X, a live Windows game client, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
 
 ---
 
@@ -242,6 +243,11 @@ What has been checked, and how (Stream-able 1.1.0):
 ```
 
 Every dependency is pinned in `gradle.properties`. Minecraft 26.x ships deobfuscated, so the buildscript declares no mapping layer.
+
+CI (`.github/workflows/ci.yml`) runs version-sync plus Temurin 25 test and jar
+build on **Linux and Windows** for every push and pull request to `main`. Model
+and DSP benchmark suites stay opt-in skips when `STREAMABLE_MODEL_DIR` /
+`-Dstreamable.benchmarks` are unset.
 
 GitHub Actions runs `./gradlew test` and `./gradlew build -x test` on Temurin 25 for every push and pull request to `main`. ONNX model and DSP benchmark suites stay opt-in (`STREAMABLE_MODEL_DIR`, `-Dstreamable.benchmarks=true`) and skip when unset.
 

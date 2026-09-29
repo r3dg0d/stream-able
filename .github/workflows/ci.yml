@@ -1,4 +1,4 @@
-# Stream-able CI — unit/integration tests + jar on Java 25.
+# Stream-able CI — unit/integration tests + jar on Java 25 (Linux + Windows).
 # Model / hardware / benchmark suites are opt-in via env/system props and
 # skip cleanly when STREAMABLE_MODEL_DIR / streamable.benchmarks are unset.
 # Minecraft 26.x is mojmap/deobfuscated, so Loom has no remapJar task.
@@ -18,24 +18,38 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # Keep ./gradlew portable across ubuntu and windows-latest runners.
+    shell: bash
+
 jobs:
   version-sync:
     name: Version sync
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check mod_version matches CHANGELOG
+      - name: Check mod_version / minecraft_version match docs
         run: |
           set -euo pipefail
           ver=$(sed -n 's/^mod_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
           test -n "$ver"
+          test -n "$mc"
           grep -E "^## ${ver}( |$)" CHANGELOG.md
-          echo "mod_version=${ver} is present in CHANGELOG.md"
+          grep -F "Minecraft ${mc}" CHANGELOG.md
+          grep -F "mc${mc}-fabric" README.md
+          grep -E "^\| Minecraft \| \*\*${mc}\*\*" README.md
+          echo "mod_version=${ver} minecraft_version=${mc} OK in CHANGELOG + README"
 
   test:
-    name: Test and build (Java 25)
-    runs-on: ubuntu-latest
+    name: Test and build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: version-sync
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -47,6 +61,7 @@ jobs:
           cache: gradle
 
       - name: Make gradlew executable
+        if: runner.os != 'Windows'
         run: chmod +x gradlew
 
       - name: Test
@@ -56,6 +71,8 @@ jobs:
         run: ./gradlew build -x test --no-daemon --stacktrace
 
       - name: Upload jar
+        # One jar artifact from Linux is enough; Windows proves the same sources compile.
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: stream-able-jar
