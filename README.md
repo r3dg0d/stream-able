@@ -216,7 +216,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 - **MCEF issue #4 (Backspace / Enter in off-screen browsers).** Stream-able sends the character events a real keyboard would, through MCEF's public API, plus a self-verifying JavaScript fallback that only acts if the page did not change. See the source for details.
 - **Browser `speechSynthesis` is not captured** (OS/Chromium path outside Web Audio); Off / Stream-only mute it locally. Iframe media is tapped when CEF can script the frame (see Audio).
-- **Per-destination `tee` reporting**: mid-stream slave failures that mention a destination URL are attributed to that row (others stay live); Stream Health names the failed/reconnecting destinations instead of claiming the session is smooth. **Reconnect** on a failed row recovers it on a dedicated encoder when siblings are still live (extra encode cost; healthy slaves stay up). Full process death still reconnects the shared encoder as a unit; FFmpeg has no richer per-slave API.
+- **Per-destination `tee` reporting**: mid-stream slave failures that mention a destination URL are attributed to that row (others stay live); Stream Health names the failed/reconnecting destinations instead of claiming the session is smooth. Failed rows are **recovered automatically** onto a dedicated encoder on the session reconnect backoff (extra encode cost; healthy slaves stay up); Destinations → Reconnect splits immediately. Full process death still reconnects the shared encoder as a unit; FFmpeg has no richer per-slave API.
 - **Shader mods** replace parts of the render pipeline; Stream-able hooks the tail of `GameRenderer.render`, the most compatible point available, but exotic pipelines may interact badly.
 
 ---

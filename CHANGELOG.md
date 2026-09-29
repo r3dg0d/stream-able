@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Improved
+- **Automatic tee slave recovery**: a mid-stream failed tee row is scheduled for
+  recovery on a dedicated encoder using the session reconnect backoff (healthy
+  siblings stay on the shared process). Destinations → Reconnect still splits
+  immediately. Disable reconnect in Streaming settings to require manual recovery
+  only. Solo groups and fully-failed groups still restart as a unit.
 - **Tee slave Reconnect**: Destinations → Reconnect on a mid-stream failed tee
   row recovers that destination on a dedicated encoder when siblings are still
   live, instead of restarting the shared FFmpeg process (and dropping healthy

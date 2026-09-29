@@ -7,8 +7,11 @@ import dev.streamable.ffmpeg.FFmpegCommandBuilder;
 import dev.streamable.ffmpeg.FFmpegProcess;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,10 +32,10 @@ import java.util.UUID;
  * as a unit. Mid-stream slave drops therefore surface per row in Stream Health;
  * a full process death is still a shared reconnect.</p>
  *
- * <p>Manual {@linkplain StreamController#reconnectDestination(java.util.UUID)
- * Reconnect} on a failed tee row uses {@link #splitOffForRecovery(java.util.UUID)}
- * when siblings are still live: the failed destination leaves this group and gets
- * its own encoder, so healthy slaves are not restarted.</p>
+ * <p>Failed tee rows are recovered onto a dedicated encoder via
+ * {@link #splitOffForRecovery(java.util.UUID)} when siblings are still live:
+ * automatically on the session {@link ReconnectPolicy} backoff, or immediately
+ * from Destinations → Reconnect. Healthy slaves are not restarted.</p>
  */
 public final class StreamEncoderGroup implements AutoCloseable {
 
@@ -67,6 +70,10 @@ public final class StreamEncoderGroup implements AutoCloseable {
      * kept running. {@link #tick()} must not promote these back to LIVE.
      */
     private final Set<UUID> teeFailedIds = new HashSet<>();
+    /** When a mid-stream tee slave should be split onto a dedicated encoder. */
+    private final Map<UUID, Long> teeRecoveryAtMillis = new HashMap<>();
+    /** 1-based recovery attempts already scheduled for each tee-failed id. */
+    private final Map<UUID, Integer> teeRecoveryAttempts = new HashMap<>();
 
     public StreamEncoderGroup(DestinationGrouping.Group group, String ffmpegExecutable,
                               int queueCapacity, ReconnectPolicy reconnectPolicy,
@@ -130,6 +137,8 @@ public final class StreamEncoderGroup implements AutoCloseable {
             process.setOnUnexpectedExit(this::onProcessDied);
             process.setOnErrorLine(this::onErrorLine);
             teeFailedIds.clear();
+            teeRecoveryAtMillis.clear();
+            teeRecoveryAttempts.clear();
             process.start();
             // Deliberately still CONNECTING: a spawned process proves nothing.
             // FFmpeg can start, fail the RTMP handshake and exit a second later,
@@ -242,13 +251,28 @@ public final class StreamEncoderGroup implements AutoCloseable {
      * Live stderr hook: a tee slave can fail while {@code onfail=ignore} keeps
      * the encoder running. Attribute the line and leave healthy siblings live.
      */
-    private void onErrorLine(String errorLine) {
+    /** Live stderr hook (package-visible for offline recovery tests). */
+    void onErrorLine(String errorLine) {
+        int flagged = noteTeeSlaveFailures(errorLine);
+        if (flagged > 0) {
+            scheduleTeeRecoveries(System.currentTimeMillis());
+        }
+    }
+
+    /**
+     * Attributes a stderr line onto destinations and records tee-failed ids.
+     * Does not schedule recovery (tests drive {@link #scheduleTeeRecoveries(long)}
+     * with a fixed clock).
+     *
+     * @return how many destinations were flagged
+     */
+    int noteTeeSlaveFailures(String errorLine) {
         if (stopped) {
-            return;
+            return 0;
         }
         int flagged = TeeSlaveAttributor.flagFailedSlaves(errorLine, group.destinations());
         if (flagged <= 0) {
-            return;
+            return 0;
         }
         for (StreamDestination destination : group.destinations()) {
             if (destination.state() == DestinationState.ERROR) {
@@ -258,6 +282,86 @@ public final class StreamEncoderGroup implements AutoCloseable {
         StreamAbleLog.STREAMING.warn(
                 "Attributed ingest error to {} destination(s) without stopping the shared encoder",
                 flagged);
+        return flagged;
+    }
+
+    /**
+     * Schedules dedicated-encoder recovery for newly failed tee slaves that still
+     * have a {@link DestinationState#LIVE} sibling, using {@link ReconnectPolicy}.
+     */
+    void scheduleTeeRecoveries(long nowMillis) {
+        if (stopped || !reconnectPolicy.enabled()) {
+            return;
+        }
+        for (StreamDestination destination : group.destinations()) {
+            UUID id = destination.id();
+            if (!teeFailedIds.contains(id) || destination.state() != DestinationState.ERROR) {
+                continue;
+            }
+            if (teeRecoveryAtMillis.containsKey(id)) {
+                continue;
+            }
+            if (!TeeRecovery.shouldSplitOff(destination, group.destinations())) {
+                continue;
+            }
+            int soFar = teeRecoveryAttempts.getOrDefault(id, 0);
+            if (!reconnectPolicy.shouldRetry(soFar)) {
+                StreamAbleLog.STREAMING.error(
+                        "Tee slave recovery exhausted for {} after {} attempt(s)",
+                        destination.name(), soFar);
+                continue;
+            }
+            int attempt = soFar + 1;
+            teeRecoveryAttempts.put(id, attempt);
+            long delay = reconnectPolicy.delayForAttempt(attempt);
+            teeRecoveryAtMillis.put(id, nowMillis + delay);
+            destination.setState(DestinationState.RECONNECTING);
+            destination.setReconnectAttempts(attempt);
+            destination.setLastError(
+                    "Ingest failed. Recovering on a dedicated encoder in "
+                            + (delay / 1000) + " seconds... "
+                            + reconnectPolicy.describeAttempt(attempt));
+            StreamAbleLog.STREAMING.warn(
+                    "Scheduling tee slave recovery for {} in {} ms ({})",
+                    destination.name(), delay, reconnectPolicy.describeAttempt(attempt));
+        }
+    }
+
+    /**
+     * Destinations whose scheduled tee recovery is due. Removes them from the
+     * schedule map; the controller should call
+     * {@link StreamController#reconnectDestination(UUID)} for each.
+     */
+    public List<UUID> pollReadyTeeRecoveries() {
+        return pollReadyTeeRecoveries(System.currentTimeMillis());
+    }
+
+    List<UUID> pollReadyTeeRecoveries(long nowMillis) {
+        if (stopped || teeRecoveryAtMillis.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ready = new ArrayList<>();
+        for (Map.Entry<UUID, Long> entry : teeRecoveryAtMillis.entrySet()) {
+            Long at = entry.getValue();
+            if (at == null || at <= 0 || nowMillis < at) {
+                continue;
+            }
+            UUID id = entry.getKey();
+            StreamDestination target = null;
+            for (StreamDestination destination : group.destinations()) {
+                if (destination.id().equals(id)) {
+                    target = destination;
+                    break;
+                }
+            }
+            if (TeeRecovery.shouldSplitOff(target, group.destinations())) {
+                ready.add(id);
+            }
+        }
+        for (UUID id : ready) {
+            teeRecoveryAtMillis.remove(id);
+        }
+        return List.copyOf(ready);
     }
 
     /**
@@ -303,6 +407,8 @@ public final class StreamEncoderGroup implements AutoCloseable {
         attempts = 0;
         nextRetryAtMillis = 0;
         teeFailedIds.clear();
+        teeRecoveryAtMillis.clear();
+        teeRecoveryAttempts.clear();
         return start(withAudio);
     }
 
@@ -360,6 +466,8 @@ public final class StreamEncoderGroup implements AutoCloseable {
             return false;
         }
         teeFailedIds.remove(destinationId);
+        teeRecoveryAtMillis.remove(destinationId);
+        teeRecoveryAttempts.remove(destinationId);
         group = new DestinationGrouping.Group(group.profile(), remaining);
         return true;
     }

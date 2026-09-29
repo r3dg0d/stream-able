@@ -76,6 +76,19 @@ class TeeSlaveAttributorTest {
     }
 
     @Test
+    void doesNotClobberReconnectingDestination() {
+        StreamDestination youtube = destination("YouTube", StreamPlatform.YOUTUBE,
+                "rtmps://a.rtmps.youtube.com/live2", "k");
+        youtube.setState(DestinationState.RECONNECTING);
+        youtube.setLastError("Recovering on a dedicated encoder in 5 seconds...");
+
+        assertEquals(0, TeeSlaveAttributor.flagFailedSlaves(
+                "Error opening output rtmps://a.rtmps.youtube.com/live2", List.of(youtube)));
+        assertEquals(DestinationState.RECONNECTING, youtube.state());
+        assertTrue(youtube.lastError().contains("dedicated encoder"));
+    }
+
+    @Test
     void blankOrNullInputMatchesNothing() {
         StreamDestination twitch = destination("Twitch", StreamPlatform.TWITCH,
                 "rtmp://live.twitch.tv/app", "k");

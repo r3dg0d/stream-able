@@ -27,6 +27,17 @@ class TeeRecoveryTest {
     }
 
     @Test
+    @DisplayName("split-off when scheduled RECONNECTING beside a LIVE sibling")
+    void splitsWhenReconnectingBesideLiveSibling() {
+        StreamDestination recovering = destination("YouTube");
+        StreamDestination live = destination("Twitch");
+        recovering.setState(DestinationState.RECONNECTING);
+        live.setState(DestinationState.LIVE);
+
+        assertTrue(TeeRecovery.shouldSplitOff(recovering, List.of(recovering, live)));
+    }
+
+    @Test
     void doesNotSplitSoloGroup() {
         StreamDestination failed = destination("Twitch");
         failed.setState(DestinationState.ERROR);
@@ -43,7 +54,7 @@ class TeeRecoveryTest {
     }
 
     @Test
-    void doesNotSplitLiveOrReconnectingTargets() {
+    void doesNotSplitLiveOrConnectingTargets() {
         StreamDestination target = destination("Twitch");
         StreamDestination sibling = destination("YouTube");
         sibling.setState(DestinationState.LIVE);
@@ -51,7 +62,7 @@ class TeeRecoveryTest {
         target.setState(DestinationState.LIVE);
         assertFalse(TeeRecovery.shouldSplitOff(target, List.of(target, sibling)));
 
-        target.setState(DestinationState.RECONNECTING);
+        target.setState(DestinationState.CONNECTING);
         assertFalse(TeeRecovery.shouldSplitOff(target, List.of(target, sibling)));
     }
 

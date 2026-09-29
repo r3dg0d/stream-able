@@ -22,9 +22,9 @@ import java.util.UUID;
  * profile, so compatible destinations share one encoder and one encode. Each
  * group fails, retries and recovers on its own - a dead Kick ingest does not
  * take Twitch and YouTube offline. A mid-stream tee slave that is marked
- * {@link DestinationState#ERROR} can also be recovered via
- * {@link #reconnectDestination(UUID)} onto a dedicated encoder without
- * restarting healthy siblings.</p>
+ * {@link DestinationState#ERROR} is recovered onto a dedicated encoder
+ * automatically (session {@link ReconnectPolicy} backoff) or immediately via
+ * {@link #reconnectDestination(UUID)}, without restarting healthy siblings.</p>
  *
  * <p><b>Threading:</b> {@link #submitFrame} is called from the render thread and
  * must never block; everything it touches is a bounded queue. Lifecycle methods
@@ -237,12 +237,14 @@ public final class StreamController {
 
     /**
      * Promotes groups to LIVE once they confirm publishing, and drives reconnect
-     * backoff. Call once per client tick.
+     * backoff (full process death and mid-stream tee slave split-off). Call once
+     * per client tick.
      */
     public void tick() {
         if (state != State.LIVE) {
             return;
         }
+        List<UUID> teeRecoveries = new ArrayList<>();
         for (StreamEncoderGroup group : groups) {
             group.tick();
             if (group.isReadyToRetry()) {
@@ -251,6 +253,14 @@ public final class StreamController {
                 if (error != null) {
                     StreamAbleLog.STREAMING.warn("Reconnect attempt failed: {}", error);
                 }
+            }
+            teeRecoveries.addAll(group.pollReadyTeeRecoveries());
+        }
+        // Collect first, then recover: split-off adds a new group and must not
+        // run while iterating {@code groups}.
+        for (UUID destinationId : teeRecoveries) {
+            if (!reconnectDestination(destinationId)) {
+                StreamAbleLog.STREAMING.warn("Automatic tee slave recovery failed for {}", destinationId);
             }
         }
         // Surface a failed destination's reason so the Studio and the HUD show
@@ -277,7 +287,8 @@ public final class StreamController {
     }
 
     /**
-     * Reconnects one destination.
+     * Reconnects one destination (manual Destinations → Reconnect, or automatic
+     * tee slave recovery from {@link #tick()}).
      *
      * <p>When the destination owns its encoder alone, or every sibling has also
      * failed, the shared group is restarted. When it failed inside a live tee

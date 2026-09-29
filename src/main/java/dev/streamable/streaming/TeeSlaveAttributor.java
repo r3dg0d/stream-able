@@ -69,11 +69,17 @@ public final class TeeSlaveAttributor {
      */
     public static int flagFailedSlaves(String errorLine, List<StreamDestination> destinations) {
         List<StreamDestination> matches = matching(errorLine, destinations);
+        int flagged = 0;
         for (StreamDestination destination : matches) {
+            // Do not clobber a destination already waiting on dedicated-encoder recovery.
+            if (destination.state() == DestinationState.RECONNECTING) {
+                continue;
+            }
             destination.setState(DestinationState.ERROR);
             destination.setLastError(errorLine);
+            flagged++;
         }
-        return matches.size();
+        return flagged;
     }
 
     static boolean matchesDestination(String lowerError, StreamDestination destination) {
