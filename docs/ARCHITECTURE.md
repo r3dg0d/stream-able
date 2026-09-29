@@ -88,7 +88,7 @@ microphone can be the mic source, via `MicrophoneRouting`.
 
 ### Browser audio (`browser/audio`)
 JCEF in MCEF Modern has no `CefAudioHandler`, so `audio-tap.js` runs inside each
-page. It patches `AudioNode.prototype.connect/disconnect` so anything connected to
+frame. It patches `AudioNode.prototype.connect/disconnect` so anything connected to
 a live destination goes through a per-context hub (volume → monitor gain →
 destination, and volume → ScriptProcessor tap), and gives media elements a
 `MediaElementSource` in the tap's own context. The tap posts base64 16-bit PCM to
@@ -98,11 +98,15 @@ chunk is mixed into the Browser Sources bus keyed by source and stream.
 
 Timing matters: pages wire up audio while they load, so the tap is registered
 with DevTools `Page.addScriptToEvaluateOnNewDocument` (with the Page domain
-enabled). Each browser is created at `about:blank`, and the real URL is loaded
-when the blank page finishes loading and the script is registered (with a
-timeout fallback). JCEF fixes a browser's handlers and message routers at
-creation, so a throwaway browser installs them on MCEF's shared client before
-the first real source.
+enabled) and re-injected on every CEF frame's load start/end via
+`CefFrame.executeJavaScript` (main document and iframes). Mode/volume changes
+walk `CefBrowser.getFrameIdentifiers()` so iframe taps stay in sync.
+`speechSynthesis` is wrapped to cancel/mute when monitor is off; its audio
+still cannot enter the capture graph. Each browser is created at `about:blank`,
+and the real URL is loaded when the blank page finishes loading and the script
+is registered (with a timeout fallback). JCEF fixes a browser's handlers and
+message routers at creation, so a throwaway browser installs them on MCEF's
+shared client before the first real source.
 
 ### Replay buffer (`recording/replay`)
 `ReplayBuffer` runs a third output through FFmpeg's segment muxer: 2 s MPEG-TS

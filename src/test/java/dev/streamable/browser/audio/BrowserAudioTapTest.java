@@ -52,4 +52,16 @@ class BrowserAudioTapTest {
         assertTrue(BrowserAudioTap.script(BrowserAudioMode.MONITOR_AND_STREAM, 1f).contains("\"monitor\":true,\"capture\":true"));
         assertTrue(stream.contains(BrowserAudioTap.QUERY_FUNCTION), "the script uses the router's function");
     }
+
+    @Test
+    void scriptHonoursSpeechSynthesisLocallyAndMentionsIframes() {
+        String script = BrowserAudioTap.script(BrowserAudioMode.MONITOR_AND_STREAM, 1f);
+        assertTrue(script.contains("speechSynthesis"), "wraps speechSynthesis for local mute");
+        assertTrue(script.contains("applySpeechMonitor") || script.contains("utterance.volume"),
+                "Off / Stream-only mute or cancel TTS");
+        assertTrue(script.contains("iframes") || script.contains("iframe"),
+                "documents per-frame / iframe injection");
+        assertTrue(script.contains("__streamablePatched") || script.contains("origSpeak"),
+                "patches speak once");
+    }
 }

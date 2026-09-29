@@ -29,9 +29,13 @@ import dev.streamable.source.BrowserSource;
  *
  * <h2>Limits</h2>
  * <ul>
- *   <li>Speech synthesis ({@code speechSynthesis}) and audio playing inside
- *       iframes are not routed through the tap: they are heard locally but do
- *       not reach outputs, and "Off" / "Stream only" cannot silence them.</li>
+ *   <li>The tap runs in every CEF frame (main document and iframes), so media
+ *       and Web Audio inside iframes reach the Browser Sources bus whenever
+ *       the engine can script that frame. Cross-origin frames the engine cannot
+ *       script remain untapped.</li>
+ *   <li>Speech synthesis ({@code speechSynthesis}) plays outside Web Audio and
+ *       cannot be captured; "Off" / "Stream only" cancel or mute it locally so
+ *       it is not heard on the player's speakers.</li>
  *   <li>Latency is about one Web Audio block (~40 ms) plus the mixer's.</li>
  * </ul>
  */
@@ -46,8 +50,9 @@ public final class BrowserAudioBridge {
     }
 
     private static final String LIMITS =
-            "Page audio from <audio>/<video> elements and Web Audio is captured inside the page. "
-                    + "Speech synthesis and audio inside iframes are only heard locally.";
+            "Page audio from <audio>/<video> elements and Web Audio is captured in each frame "
+                    + "(including iframes the engine can script). "
+                    + "speechSynthesis cannot be captured; Off / Stream-only mute it locally.";
 
     private BrowserAudioBridge() {
     }

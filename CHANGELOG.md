@@ -19,6 +19,12 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   when `/proc/self/cmdline` is unavailable (Windows launchers), still floored
   at 64 MB.
 - `docs/ARCHITECTURE.md` documents the Minecraft 26.2 render/GUI call sites.
+- **Browser audio iframes** ([#1](https://github.com/r3dg0d/stream-able/issues/1)):
+  the in-page tap is injected into every CEF frame via `CefFrame.executeJavaScript`
+  (load start/end and mode/volume reconfigure), so iframe media / Web Audio reach
+  the Browser Sources bus when the engine can script the frame.
+- **`speechSynthesis` local honour**: Off / Stream-only cancel or mute utterances
+  locally (still not capturable; Chromium plays TTS outside Web Audio).
 
 ## 1.2.0 - 2026-09-29
 

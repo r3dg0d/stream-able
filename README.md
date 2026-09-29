@@ -167,7 +167,7 @@ The JCEF build MCEF Modern `0.3.3+mc26.2.jcef146.0.10` ships has no `CefAudioHan
 | Recording & stream only | - | yes |
 | Monitor + recording & stream | yes | yes |
 
-Limits: speech synthesis (`speechSynthesis`) and audio inside iframes are not routed through the tap, so they play locally only and are not silenced by "Off" or "Recording & stream only". Latency is about one Web Audio block (~40 ms) plus the mixer's.
+The tap is injected into every frame (main document and iframes), so media and Web Audio inside iframes reach recordings and the stream whenever the engine can script that frame. `speechSynthesis` still cannot be captured (Chromium plays it outside Web Audio); "Off" / "Recording & stream only" cancel or mute it locally so it is not heard on your speakers. Latency is about one Web Audio block (~40 ms) plus the mixer's.
 
 Note that MCEF Modern itself starts Chromium with `--disable-web-security` and autoplay without a user gesture. That is why media from other sites can be tapped, and it is also why browser sources should only point at pages you trust.
 
@@ -215,7 +215,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 ## Known issues
 
 - **MCEF issue #4 (Backspace / Enter in off-screen browsers).** Stream-able sends the character events a real keyboard would, through MCEF's public API, plus a self-verifying JavaScript fallback that only acts if the page did not change. See the source for details.
-- **Browser audio from iframes and speech synthesis is not captured** (see Audio).
+- **Browser `speechSynthesis` is not captured** (OS/Chromium path outside Web Audio); Off / Stream-only mute it locally. Iframe media is tapped when CEF can script the frame (see Audio).
 - **Per-destination `tee` reporting is coarse** for destinations sharing an encoder.
 - **Shader mods** replace parts of the render pipeline; Stream-able hooks the tail of `GameRenderer.render`, the most compatible point available, but exotic pipelines may interact badly.
 

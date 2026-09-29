@@ -12,8 +12,13 @@
 // (window.streamableAudioQuery). Nothing leaves the computer except in the
 // player's own recording or stream.
 //
+// Injected into every frame (main document and iframes) by CEF load handlers
+// and Page.addScriptToEvaluateOnNewDocument, so same-origin and CEF-scriptable
+// cross-origin iframe media / Web Audio are tapped the same way.
+//
 // Configuration arrives as the __SA_CONFIG__ object; re-injecting the script
-// only updates it. Not captured: speechSynthesis, audio inside iframes.
+// only updates it. speechSynthesis cannot be routed into Web Audio (Chromium
+// plays it outside the page graph); Off / Stream-only cancel or mute it locally.
 (function (config) {
   'use strict';
   var existing = window.__streamableAudioTap;
@@ -180,6 +185,33 @@
     }
   });
 
+  // speechSynthesis plays through Chromium's OS audio path, not Web Audio, so
+  // it cannot reach the tap. Honour monitor locally: Off / Stream-only cancel
+  // in-flight speech and force new utterances silent.
+  function applySpeechMonitor() {
+    if (typeof speechSynthesis === 'undefined') {
+      return;
+    }
+    if (!state.monitor) {
+      try { speechSynthesis.cancel(); } catch (e) {}
+    }
+  }
+  if (typeof speechSynthesis !== 'undefined' && typeof speechSynthesis.speak === 'function'
+      && !speechSynthesis.__streamablePatched) {
+    var origSpeak = speechSynthesis.speak.bind(speechSynthesis);
+    speechSynthesis.speak = function (utterance) {
+      if (!state.monitor && utterance) {
+        try { utterance.volume = 0; } catch (e) {}
+      }
+      return origSpeak(utterance);
+    };
+    try {
+      Object.defineProperty(speechSynthesis, '__streamablePatched', { value: true });
+    } catch (e) {
+      speechSynthesis.__streamablePatched = true;
+    }
+  }
+
   var tapApi = {
     // For diagnostics: what the tap has routed so far.
     stats: function () {
@@ -188,7 +220,8 @@
         hooked: counters.hooked,
         hookFailed: counters.hookFailed,
         chunks: counters.chunks,
-        mediaContext: ownContext ? ownContext.state : 'none'
+        mediaContext: ownContext ? ownContext.state : 'none',
+        speechPatched: typeof speechSynthesis !== 'undefined' && !!speechSynthesis.__streamablePatched
       };
     },
     configure: function (next) {
@@ -196,6 +229,7 @@
       state.capture = !!next.capture;
       state.volume = typeof next.volume === 'number' ? Math.max(0, Math.min(2, next.volume)) : 1;
       hubs.forEach(function (hub) { hub.apply(); });
+      applySpeechMonitor();
     }
   };
   Object.defineProperty(window, '__streamableAudioTap', { value: tapApi, configurable: false });

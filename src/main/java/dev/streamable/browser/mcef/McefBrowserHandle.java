@@ -152,8 +152,41 @@ public final class McefBrowserHandle implements BrowserHandle {
             }
             return;
         }
-        executeJavaScript(audioScript());   // the current document
+        injectAudioTapIntoAllFrames();      // main document and every live iframe
         registerEarlyScript();              // every future document, before its own scripts
+    }
+
+    /**
+     * Re-applies the audio tap (or just its settings, if already installed) in
+     * every live frame. Mode / volume changes must reach iframes too: main
+     * frame {@code executeJavaScript} alone left iframe taps on stale settings
+     * and never installed a tap in frames that missed the load-handler pass.
+     */
+    private void injectAudioTapIntoAllFrames() {
+        String script = audioScript();
+        if (script.isEmpty() || closed.get()) {
+            return;
+        }
+        try {
+            org.cef.browser.CefBrowser cef = browser.getCefBrowser();
+            java.util.Vector<String> ids = cef.getFrameIdentifiers();
+            if (ids == null || ids.isEmpty()) {
+                cef.executeJavaScript(script, currentUrl(), 0);
+                return;
+            }
+            for (String id : ids) {
+                org.cef.browser.CefFrame frame = cef.getFrameByIdentifier(id);
+                if (frame != null && frame.isValid()) {
+                    try {
+                        frame.executeJavaScript(script, frame.getURL(), 0);
+                    } catch (RuntimeException e) {
+                        StreamAbleLog.BROWSER.debug("Audio tap not applied to frame {}: {}", id, e.toString());
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            StreamAbleLog.BROWSER.warn("Failed to apply audio tap across frames", e);
+        }
     }
 
     /** Called when a main-frame document finishes loading; starts the real page after the blank one. */
@@ -165,9 +198,10 @@ public final class McefBrowserHandle implements BrowserHandle {
 
     /**
      * Registers the audio tap with DevTools' {@code Page.addScriptToEvaluateOnNewDocument},
-     * which runs it in every new document before any page script - so audio a
-     * page wires up while it loads (inline scripts, libraries like Howler.js)
-     * is tapped too. Injecting at load start or end is too late for that.
+     * which runs it in every new document (main frame and iframes) before any
+     * page script - so audio a page wires up while it loads (inline scripts,
+     * libraries like Howler.js) is tapped too. Injecting at load start or end
+     * is too late for that; the CEF load handler still re-injects per frame.
      * The browser is created blank and only navigates to its real URL once
      * this is in place (or after a short timeout if DevTools is unavailable):
      * the blank page's load end is the first moment CEF accepts either.

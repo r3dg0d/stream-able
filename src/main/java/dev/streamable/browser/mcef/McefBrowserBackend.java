@@ -30,7 +30,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * {@code CefLoadHandler} there lets Stream-able re-apply the transparency CSS,
  * the user's custom CSS and the keyboard shim every time a page finishes
  * loading - including after a redirect or a widget's own reload, which is when
- * an overlay would otherwise go opaque.</p>
+ * an overlay would otherwise go opaque. The audio tap is injected into every
+ * frame (main document and iframes) so media playing inside iframes reaches
+ * the Browser Sources bus.</p>
  */
 public final class McefBrowserBackend implements BrowserBackend {
 
@@ -212,17 +214,22 @@ public final class McefBrowserBackend implements BrowserBackend {
                 @Override
                 public void onLoadStart(CefBrowser browser, CefFrame frame,
                                         org.cef.network.CefRequest.TransitionType transitionType) {
-                    // As early as possible, so the tap is in place before the
-                    // page creates its own audio; re-applied at load end.
-                    if (frame != null && frame.isMain()) {
-                        injectAudioTap(browser);
-                    }
+                    // Every frame (main + iframes): the tap must live in the same
+                    // JS realm as the media / Web Audio it hooks. Main-frame-only
+                    // injection left iframe audio untapped (issue #1).
+                    injectAudioTap(browser, frame);
                 }
 
                 @Override
                 public void onLoadEnd(CefBrowser browser, CefFrame frame, int httpStatusCode) {
-                    if (frame == null || !frame.isMain()) {
-                        return;   // sub-frames inherit styling from the main document
+                    if (frame == null) {
+                        return;
+                    }
+                    // Sub-frames get the audio tap only (CSS/shim stay main-frame:
+                    // overlays inherit styling from the top document).
+                    if (!frame.isMain()) {
+                        injectAudioTap(browser, frame);
+                        return;
                     }
                     McefBrowserHandle handle = handleFor(browser);
                     if (handle == null || handle.isClosed()) {
@@ -237,7 +244,7 @@ public final class McefBrowserBackend implements BrowserBackend {
                         if (!INPUT_SHIM.isEmpty()) {
                             browser.executeJavaScript(INPUT_SHIM, browser.getURL(), 0);
                         }
-                        injectAudioTap(browser);
+                        injectAudioTap(browser, frame);
                     } catch (RuntimeException e) {
                         StreamAbleLog.BROWSER.warn("Failed to inject browser source styling/shim", e);
                     }
@@ -299,18 +306,29 @@ public final class McefBrowserBackend implements BrowserBackend {
                 existing.getClass().getName());
     }
 
-    private void injectAudioTap(CefBrowser browser) {
+    /**
+     * Runs the audio tap in one frame. Prefer {@link CefFrame#executeJavaScript}
+     * so iframes get their own realm (AudioNode / HTMLMediaElement prototypes
+     * are per-window); fall back to the browser's main-frame execute when the
+     * frame is missing.
+     */
+    private void injectAudioTap(CefBrowser browser, CefFrame frame) {
         McefBrowserHandle handle = handleFor(browser);
         if (handle == null || handle.isClosed()) {
             return;
         }
         String script = handle.audioScript();
-        if (!script.isEmpty()) {
-            try {
+        if (script.isEmpty()) {
+            return;
+        }
+        try {
+            if (frame != null && frame.isValid()) {
+                frame.executeJavaScript(script, frame.getURL(), 0);
+            } else if (browser != null) {
                 browser.executeJavaScript(script, browser.getURL(), 0);
-            } catch (RuntimeException e) {
-                StreamAbleLog.BROWSER.debug("Could not inject the audio tap: {}", e.toString());
             }
+        } catch (RuntimeException e) {
+            StreamAbleLog.BROWSER.debug("Could not inject the audio tap: {}", e.toString());
         }
     }
 
