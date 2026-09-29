@@ -18,8 +18,8 @@ public enum StreamPlatform {
 
     TWITCH("Twitch", "rtmp://live.twitch.tv/app", true,
             "Twitch rejects bitrates above ~8000 kbps for non-partners and requires a 2s keyframe interval."),
-    YOUTUBE("YouTube", "rtmp://a.rtmp.youtube.com/live2", true,
-            "YouTube requires a 2s (or shorter) keyframe interval; enable the stream in YouTube Studio first."),
+    YOUTUBE("YouTube", "rtmps://a.rtmps.youtube.com/live2", true,
+            "YouTube prefers RTMPS (port 443). Requires a 2s (or shorter) keyframe interval; enable the stream in YouTube Studio first. Plain RTMP fallback: rtmp://a.rtmp.youtube.com/live2."),
     X("X / Twitter", "rtmps://va.pscp.tv:443/x", true,
             "X ingest endpoints are region specific; copy the exact URL from the X producer view."),
     CUSTOM("Custom RTMP/RTMPS", "", false,

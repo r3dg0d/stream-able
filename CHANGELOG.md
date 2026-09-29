@@ -13,6 +13,9 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   iframe / speechSynthesis browser audio,
   [#2](https://github.com/r3dg0d/stream-able/issues/2) live Twitch/YouTube/X publish
   verification, [#3](https://github.com/r3dg0d/stream-able/issues/3) Windows client smoke.
+- **RTMPS NetworkProbe fixture**: local TLS + RTMP handshake unit test (never publishes).
+- **Optional live ingest reachability** (`STREAMABLE_LIVE_INGEST=1`): handshake-only
+  probes of Twitch / YouTube / X default hosts (no stream keys).
 
 ### Changed
 - Native-runtime thread stacks size from `ProcessHandle` command-line length
@@ -27,6 +30,12 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   locally (still not capturable; Chromium plays TTS outside Web Audio).
 - **Test flake**: `FFmpegProcessTimelineTest` uses 64 KiB frames so the OS pipe
   backs up during the slow-consumer sleep (16-byte frames flaked on fast GHA).
+- **YouTube preset → RTMPS** ([#2](https://github.com/r3dg0d/stream-able/issues/2)):
+  default ingest is now `rtmps://a.rtmps.youtube.com/live2` (plain
+  `rtmp://a.rtmp.youtube.com/live2` remains the documented fallback).
+- **Browser test page**: same-origin iframe audio controls + `speechSynthesis`
+  button; stale "local monitoring only" Web Audio comment removed so the page
+  matches the in-page tap.
 
 ## 1.2.0 - 2026-09-29
 

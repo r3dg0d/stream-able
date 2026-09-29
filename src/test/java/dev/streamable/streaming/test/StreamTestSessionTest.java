@@ -100,6 +100,14 @@ class StreamTestSessionTest {
     }
 
     @Test
+    void youtubePresetDefaultsToRtmps() {
+        assertTrue(StreamPlatform.YOUTUBE.defaultIngestUrl().startsWith("rtmps://"));
+        assertTrue(StreamPlatform.YOUTUBE.defaultIngestUrl().contains("a.rtmps.youtube.com"));
+        assertTrue(StreamPlatform.X.defaultIngestUrl().startsWith("rtmps://"));
+        assertTrue(StreamPlatform.TWITCH.defaultIngestUrl().startsWith("rtmp://"));
+    }
+
+    @Test
     void otherServicesNeverPublishDuringATest() {
         for (StreamPlatform platform : List.of(StreamPlatform.YOUTUBE, StreamPlatform.X, StreamPlatform.CUSTOM)) {
             StreamTestPlan plan = StreamTestPlan.forDestination(destination(platform, "rtmp://a.example/live", "k"));

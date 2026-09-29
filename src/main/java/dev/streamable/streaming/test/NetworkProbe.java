@@ -33,9 +33,18 @@ public final class NetworkProbe {
     }
 
     private final int timeoutMillis;
+    private final SSLSocketFactory sslSocketFactory;
 
     public NetworkProbe(int timeoutMillis) {
+        this(timeoutMillis, (SSLSocketFactory) SSLSocketFactory.getDefault());
+    }
+
+    /** Package-visible so tests can supply a trusting factory for a local RTMPS fixture. */
+    NetworkProbe(int timeoutMillis, SSLSocketFactory sslSocketFactory) {
         this.timeoutMillis = timeoutMillis;
+        this.sslSocketFactory = sslSocketFactory == null
+                ? (SSLSocketFactory) SSLSocketFactory.getDefault()
+                : sslSocketFactory;
     }
 
     /** Runs every applicable check in order, stopping at the first failure. */
@@ -82,8 +91,7 @@ public final class NetworkProbe {
             Socket channel = raw;
             if (tls) {
                 start = System.nanoTime();
-                SSLSocket secure = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault())
-                        .createSocket(raw, host, port, true);
+                SSLSocket secure = (SSLSocket) sslSocketFactory.createSocket(raw, host, port, true);
                 secure.setSoTimeout(timeoutMillis);
                 secure.startHandshake();
                 checks.add(new Check("TLS", Status.PASSED, "Secure connection (" + secure.getSession().getProtocol()

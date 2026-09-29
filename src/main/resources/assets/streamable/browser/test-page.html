@@ -62,13 +62,32 @@
   </div>
 
   <div class="row">
-    <button id="audio">Play sound</button>
+    <button id="audio">Play Web Audio tone</button>
+    <button id="tts">Speak (speechSynthesis)</button>
     <canvas id="canvas" width="90" height="34"></canvas>
   </div>
 
   <div class="row" style="display:block">
     <div id="log"></div>
   </div>
+</div>
+
+<div class="panel">
+  <h1>Same-origin iframe audio (#1 smoke)</h1>
+  <p style="font-size:11px;margin:0 0 6px;opacity:.85">
+    The tap is injected per CEF frame. Tone / &lt;audio&gt; inside this iframe should
+    reach the Browser Sources bus when capture is on; Off / Stream-only should mute
+    local speakers. Cross-origin embeds the engine cannot script stay untapped.
+  </p>
+  <iframe id="audioFrame" title="iframe audio fixture" srcdoc="&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;body style='margin:0;background:transparent;color:#fff;font:12px system-ui'&gt;
+&lt;button id=tone&gt;Iframe Web Audio&lt;/button&gt;
+&lt;button id=media&gt;Iframe &amp;lt;audio&amp;gt;&lt;/button&gt;
+&lt;script&gt;
+function beep(){var c=new (window.AudioContext||window.webkitAudioContext)();var o=c.createOscillator();var g=c.createGain();o.frequency.value=880;g.gain.value=0.12;o.connect(g).connect(c.destination);o.start();setTimeout(function(){o.stop();c.close();},300);}
+document.getElementById('tone').onclick=beep;
+document.getElementById('media').onclick=function(){var a=new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');a.volume=0.5;a.play().catch(function(e){console.log(e);});};
+&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;"
+          style="width:100%;height:52px;border:1px solid #546e7a;border-radius:4px;background:#10141a"></iframe>
 </div>
 
 <div id="transparency" title="Minecraft must be visible outside this circle"></div>
@@ -124,9 +143,9 @@
   document.addEventListener('copy', function () { say('copy event'); });
   document.addEventListener('cut', function () { say('cut event'); });
 
-  // Audio check. With the JCEF build Stream-able targets there is no
-  // CefAudioHandler, so this should be audible locally but will NOT appear in
-  // the broadcast - see BrowserAudioBridge.
+  // Main-document Web Audio: in-page tap routes this to the Browser Sources bus
+  // when capture is on (see BrowserAudioBridge / audio-tap.js). Mode Off or
+  // Stream-only should silence speakers while still capturing if configured.
   document.getElementById('audio').addEventListener('click', function () {
     try {
       var ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -137,9 +156,26 @@
       osc.connect(gain).connect(ctx.destination);
       osc.start();
       setTimeout(function () { osc.stop(); ctx.close(); }, 350);
-      say('played a 660 Hz tone (local monitoring only)');
+      say('played a 660 Hz Web Audio tone (tapped when capture is on)');
     } catch (e) {
       say('audio failed: ' + e.message);
+    }
+  });
+
+  // speechSynthesis cannot be captured (Chromium OS path). Off / Stream-only
+  // should cancel or mute it locally via the tap's speak wrapper.
+  document.getElementById('tts').addEventListener('click', function () {
+    try {
+      if (typeof speechSynthesis === 'undefined') {
+        say('speechSynthesis unavailable');
+        return;
+      }
+      var u = new SpeechSynthesisUtterance('Stream able speech synthesis check');
+      u.rate = 1.1;
+      speechSynthesis.speak(u);
+      say('speechSynthesis.speak queued (local mute only when Off / Stream-only)');
+    } catch (e) {
+      say('tts failed: ' + e.message);
     }
   });
 

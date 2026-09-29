@@ -16,8 +16,9 @@ import java.nio.file.StandardCopyOption;
  * every call so an updated mod always ships an updated page.</p>
  *
  * <p>The page exercises transparency, clicks, typing, Backspace/Enter (the keys
- * MCEF issue #4 breaks), scrolling, clipboard shortcuts, a canvas animation and
- * audio playback - i.e. everything that is hard to verify by reasoning alone.</p>
+ * MCEF issue #4 breaks), scrolling, clipboard shortcuts, a canvas animation,
+ * main-document Web Audio, {@code speechSynthesis}, and a same-origin iframe
+ * with its own tone / media controls for issue #1 live smoke.</p>
  */
 public final class BrowserTestPage {
 
