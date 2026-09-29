@@ -148,6 +148,10 @@ and a free-space floor live on `RecordingSettings`; under 100 MB free always
 blocks. A blocked start returns the message as `lastError`; a mid-recording
 block asks `StreamAbleClient` to stop (same path as the size limit). Threshold
 math is pure (`evaluate`) so unit tests do not need a real `FileStore`.
+Recording ETA (`secondsRemaining`) divides free bytes by the measured write
+rate (or configured bitrate before 5 s); Stream Health findings and the Stream
+HUD `DISK WARN` / `DISK LOW` pills (`ui/DiskHudBadge`) share those thresholds
+(2 h / 30 min) and the client's 5 s free-space cache.
 
 ### Replay buffer (`recording/replay`)
 `ReplayBuffer` runs a third output through FFmpeg's segment muxer: 2 s MPEG-TS

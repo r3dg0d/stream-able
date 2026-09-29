@@ -4,6 +4,7 @@ import dev.streamable.audio.ai.NoiseCancellationManager;
 import dev.streamable.audio.mic.MicrophoneProcessor;
 import dev.streamable.pipeline.VideoPipeline;
 import dev.streamable.streaming.DestinationState;
+import dev.streamable.recording.DiskSpaceGuardian;
 import dev.streamable.streaming.StreamHealth;
 
 import java.util.ArrayList;
@@ -202,12 +203,13 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             metrics.add(new Metric("Recording", "Duration", duration(in.recordingMillis()), "Time recorded.", Severity.OK));
             metrics.add(new Metric("Recording", "File size", bytes(in.recordingBytes()), "Video file so far.", Severity.OK));
             if (in.freeDiskBytes() > 0) {
-                double bytesPerSecond = in.recordingMillis() > 5000 && in.recordingBytes() > 0
-                        ? in.recordingBytes() / (in.recordingMillis() / 1000.0)
-                        : in.recordingBitrateKbps() * 125.0;
-                double secondsLeft = bytesPerSecond > 0 ? in.freeDiskBytes() / bytesPerSecond : -1;
-                Severity disk = secondsLeft >= 0 && secondsLeft < 1800 ? Severity.CRITICAL
-                        : secondsLeft >= 0 && secondsLeft < 7200 ? Severity.WARNING : Severity.OK;
+                double secondsLeft = DiskSpaceGuardian.secondsRemaining(
+                        in.freeDiskBytes(), in.recordingMillis(), in.recordingBytes(),
+                        in.recordingBitrateKbps());
+                Severity disk = secondsLeft >= 0 && secondsLeft < DiskSpaceGuardian.ETA_CRITICAL_SECONDS
+                        ? Severity.CRITICAL
+                        : secondsLeft >= 0 && secondsLeft < DiskSpaceGuardian.ETA_WARNING_SECONDS
+                        ? Severity.WARNING : Severity.OK;
                 metrics.add(new Metric("Recording", "Disk time remaining", secondsLeft < 0 ? "-"
                         : secondsLeft > 99 * 3600 ? "more than 99 hours" : duration((long) (secondsLeft * 1000)),
                         "Free space divided by the recording's current data rate.", disk));

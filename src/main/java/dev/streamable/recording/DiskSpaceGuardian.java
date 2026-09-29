@@ -25,6 +25,17 @@ public final class DiskSpaceGuardian {
     /** Hard floor: always block below this free space regardless of %. */
     static final long HARD_BLOCK_FREE_MB = 100;
 
+    /**
+     * Under this many seconds of recording left → CRITICAL on Stream Health
+     * and the Stream HUD {@code DISK LOW} pill.
+     */
+    public static final long ETA_CRITICAL_SECONDS = 1_800L;
+    /**
+     * Under this many seconds of recording left → WARNING on Stream Health
+     * and the Stream HUD {@code DISK WARN} pill.
+     */
+    public static final long ETA_WARNING_SECONDS = 7_200L;
+
     public enum DiskStatus {
         OK,
         WARNING,
@@ -98,6 +109,24 @@ public final class DiskSpaceGuardian {
             return new DiskCheckResult(DiskStatus.OK, -1, -1, 0,
                     "Could not check disk space: " + e.getMessage());
         }
+    }
+
+    /**
+     * Estimated seconds of recording left from free space and data rate.
+     * Negative when unknown. After 5 s of recording with bytes written, uses the
+     * measured rate; otherwise falls back to {@code bitrateKbps * 125} bytes/s
+     * (kilobits → bytes). Shared by Stream Health and the Stream HUD disk badge
+     * so the thresholds cannot drift.
+     */
+    public static double secondsRemaining(long freeBytes, long recordingMillis,
+                                          long recordingBytes, int bitrateKbps) {
+        if (freeBytes <= 0) {
+            return -1;
+        }
+        double bytesPerSecond = recordingMillis > 5_000 && recordingBytes > 0
+                ? recordingBytes / (recordingMillis / 1000.0)
+                : bitrateKbps * 125.0;
+        return bytesPerSecond > 0 ? freeBytes / bytesPerSecond : -1;
     }
 
     /** Usable free space in MiB, or {@code -1} when unknown. Never creates folders. */

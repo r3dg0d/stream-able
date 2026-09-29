@@ -4,6 +4,13 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Improved
+- **Stream HUD disk ETA badge**: while recording, the compact HUD shows
+  `DISK WARN` when free space at the current data rate is under 2 hours, or
+  `DISK LOW` under 30 minutes — the same thresholds as Stream Health. Pure
+  `DiskHudBadge` / `DiskSpaceGuardian.secondsRemaining` so Health and HUD cannot
+  drift; free-space probes stay on the existing 5 s cache.
+
 ### Removed
 - **Dead Record-able carry-over config**: `killMontages` and deferred-capture
   fields (`deferredCapture`, `deferredCaptureFps`, `deferredOutputFps`,

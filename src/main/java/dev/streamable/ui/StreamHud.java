@@ -28,9 +28,10 @@ import java.util.Locale;
  * LIVE / REC state and, while live, bitrate, encoder FPS, dropped frames and
  * the network condition. The replay buffer shows fill percent ({@code REPLAY
  * N%} / {@code SAVING}); microphone DSP overload surfaces as a {@code MIC DSP}
- * / {@code MIC DROP} pill even in compact mode (same thresholds as Stream
- * Health). Detailed mode adds the encoder, each destination and a microphone
- * meter.
+ * / {@code MIC DROP} pill; recording disk ETA under 2 h / 30 min surfaces
+ * {@code DISK WARN} / {@code DISK LOW} — all even in compact mode (same
+ * thresholds as Stream Health). Detailed mode adds the encoder, each
+ * destination and a microphone meter.
  *
  * <p>It never reaches recordings or streams. Minecraft's own HUD is drawn
  * before Stream-able captures the frame, so a normal HUD element would be
@@ -265,6 +266,11 @@ public final class StreamHud {
             labels.add(micBadge.label());
             colors.add(micBadge.level() == MicHudBadge.Level.CRITICAL ? Theme.DANGER : Theme.WARNING);
         }
+        DiskHudBadge.Badge diskBadge = diskBadge(client);
+        if (diskBadge.present()) {
+            labels.add(diskBadge.label());
+            colors.add(diskBadge.level() == DiskHudBadge.Level.CRITICAL ? Theme.DANGER : Theme.WARNING);
+        }
         if (labels.isEmpty()) {
             labels.add(editing ? "HUD - drag to move" : "Idle");
             colors.add(Theme.TEXT_MUTED);
@@ -308,6 +314,17 @@ public final class StreamHud {
             rows.add(new MicMeter(reading, client.config().microphone.muted, micBadge));
         }
         return rows;
+    }
+
+    /** Recording disk ETA badge; absent when not recording or ETA is healthy / unknown. */
+    private static DiskHudBadge.Badge diskBadge(StreamAbleClient client) {
+        if (!client.recording().isActive()) {
+            return DiskHudBadge.Badge.ABSENT;
+        }
+        return DiskHudBadge.of(true, client.freeDiskBytesCached(),
+                client.recording().elapsedMillis(),
+                client.recording().currentFileSizeBytes(),
+                client.config().recording.bitrateKbps);
     }
 
     /** Live mic DSP badge for the HUD; absent when capture is off or the queue is healthy. */

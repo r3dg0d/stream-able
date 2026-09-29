@@ -823,6 +823,19 @@ public final class StreamAbleClient {
     }
 
     /**
+     * Cached free bytes on the recording volume. Refreshed at most every 5 s so
+     * the Stream HUD disk badge and Stream Health share one FileStore probe.
+     */
+    public long freeDiskBytesCached() {
+        long now = System.currentTimeMillis();
+        if (now - cachedFreeDiskAt > 5_000) {
+            cachedFreeDisk = recording.freeDiskBytes();
+            cachedFreeDiskAt = now;
+        }
+        return cachedFreeDisk;
+    }
+
+    /**
      * Stream Health report, rebuilt at most twice a second so that drawing it
      * every frame costs nothing. Free disk space is sampled every 5 seconds.
      */
@@ -832,16 +845,12 @@ public final class StreamAbleClient {
             return cachedHealth;
         }
         boolean recordingActive = recording.isActive();
-        if (now - cachedFreeDiskAt > 5_000) {
-            cachedFreeDisk = recording.freeDiskBytes();
-            cachedFreeDiskAt = now;
-        }
         boolean micCapturing = microphone.isCapturing();
         cachedHealth = dev.streamable.diagnostics.HealthReport.build(new dev.streamable.diagnostics.HealthReport.Inputs(
                 video.stats(), health(), recordingActive,
                 recordingActive ? recording.elapsedMillis() : 0,
                 recordingActive ? recording.currentFileSizeBytes() : 0,
-                cachedFreeDisk, config.recording.bitrateKbps,
+                freeDiskBytesCached(), config.recording.bitrateKbps,
                 micCapturing ? microphone.processor().stats() : null,
                 microphone.noise().status(), micCapturing));
         cachedHealthAt = now;

@@ -89,4 +89,28 @@ class DiskSpaceGuardianTest {
                     "messages stay ASCII plain language: " + result.message());
         }
     }
+
+    @Test
+    void secondsRemainingUsesMeasuredRateAfterWarmup() {
+        // 1.5 GB in 10 min = 2.5 MB/s; 2 GB free ≈ 800 s.
+        double eta = DiskSpaceGuardian.secondsRemaining(
+                2_000_000_000L, 600_000L, 1_500_000_000L, 40_000);
+        assertTrue(eta > 750 && eta < 850, "eta was " + eta);
+        assertTrue(eta < DiskSpaceGuardian.ETA_CRITICAL_SECONDS);
+    }
+
+    @Test
+    void secondsRemainingFallsBackToBitrateWhenCold() {
+        // 6000 kbps = 750_000 B/s; 3.375 GB free = 4_500 s (between 30 min and 2 h).
+        double eta = DiskSpaceGuardian.secondsRemaining(3_375_000_000L, 1_000L, 0, 6_000);
+        assertEquals(4_500.0, eta, 0.1);
+        assertTrue(eta >= DiskSpaceGuardian.ETA_CRITICAL_SECONDS);
+        assertTrue(eta < DiskSpaceGuardian.ETA_WARNING_SECONDS);
+    }
+
+    @Test
+    void secondsRemainingUnknownWhenFreeUnknown() {
+        assertEquals(-1, DiskSpaceGuardian.secondsRemaining(-1, 60_000, 1_000_000, 6_000));
+        assertEquals(-1, DiskSpaceGuardian.secondsRemaining(0, 60_000, 1_000_000, 6_000));
+    }
 }
