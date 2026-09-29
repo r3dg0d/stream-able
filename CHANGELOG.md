@@ -4,6 +4,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.3.2 - 2026-09-29
+
+Stream HUD polish (cycles 17–19) on Minecraft 26.2.
+
 ### Improved
 - **Stream HUD corner placement**: unused `streamHudPosition` (TL / TR / BL / BR)
   now places the panel when it has not been free-dragged. Advanced → Stream HUD

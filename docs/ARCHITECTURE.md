@@ -238,7 +238,7 @@ are written atomically and are `chmod 600` on POSIX when they contain a stream k
 
 ## Minecraft 26.2 call sites
 
-Stream-able 1.3.1 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
+Stream-able 1.3.2 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
 surfaces changed relative to 26.1.x; the live code goes through these helpers
 so the rest of the tree stays readable:
 
