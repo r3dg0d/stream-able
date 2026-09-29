@@ -5,6 +5,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Improved
+- **Tee slave Reconnect**: Destinations → Reconnect on a mid-stream failed tee
+  row recovers that destination on a dedicated encoder when siblings are still
+  live, instead of restarting the shared FFmpeg process (and dropping healthy
+  slaves). Solo groups and fully-failed groups still restart as a unit.
 - **Stream Health destination findings**: mid-stream tee slave drops and
   reconnecting rows are named in Stream Health findings (and network condition
   drops to Fair/Poor). A session with one failed destination no longer claims

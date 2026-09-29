@@ -28,10 +28,15 @@ import java.util.UUID;
  * {@link DestinationState#LIVE}. If the whole process dies, the group reconnects
  * as a unit. Mid-stream slave drops therefore surface per row in Stream Health;
  * a full process death is still a shared reconnect.</p>
+ *
+ * <p>Manual {@linkplain StreamController#reconnectDestination(java.util.UUID)
+ * Reconnect} on a failed tee row uses {@link #splitOffForRecovery(java.util.UUID)}
+ * when siblings are still live: the failed destination leaves this group and gets
+ * its own encoder, so healthy slaves are not restarted.</p>
  */
 public final class StreamEncoderGroup implements AutoCloseable {
 
-    private final DestinationGrouping.Group group;
+    private DestinationGrouping.Group group;
     private final String ffmpegExecutable;
     private final int queueCapacity;
     private final ReconnectPolicy reconnectPolicy;
@@ -335,6 +340,57 @@ public final class StreamEncoderGroup implements AutoCloseable {
 
     public double queuePressure() {
         return process == null ? 0 : process.queuePressure();
+    }
+
+    /**
+     * Removes a destination from this group without stopping the shared process.
+     *
+     * <p>Used when a tee slave has already failed ({@code onfail=ignore}) and is
+     * about to be recovered on a dedicated encoder. The dead slave stays in the
+     * running FFmpeg tee (harmless); only Stream-able's bookkeeping moves.</p>
+     *
+     * @return {@code true} when the destination was present and removed
+     */
+    public boolean detachDestination(UUID destinationId) {
+        List<StreamDestination> current = group.destinations();
+        List<StreamDestination> remaining = current.stream()
+                .filter(destination -> !destination.id().equals(destinationId))
+                .toList();
+        if (remaining.size() == current.size()) {
+            return false;
+        }
+        teeFailedIds.remove(destinationId);
+        group = new DestinationGrouping.Group(group.profile(), remaining);
+        return true;
+    }
+
+    /**
+     * Detaches a failed tee destination and returns a new solo group ready to
+     * {@link #start(boolean)}, leaving this group's process and healthy siblings
+     * untouched.
+     *
+     * @return the solo recovery group, or {@code null} when split-off is not appropriate
+     */
+    public StreamEncoderGroup splitOffForRecovery(UUID destinationId) {
+        StreamDestination target = null;
+        for (StreamDestination destination : group.destinations()) {
+            if (destination.id().equals(destinationId)) {
+                target = destination;
+                break;
+            }
+        }
+        if (!TeeRecovery.shouldSplitOff(target, group.destinations())) {
+            return null;
+        }
+        if (!detachDestination(destinationId)) {
+            return null;
+        }
+        DestinationGrouping.Group solo = new DestinationGrouping.Group(group.profile(), List.of(target));
+        StreamAbleLog.STREAMING.info(
+                "Recovering {} on a dedicated encoder; {} sibling(s) stay on the shared tee",
+                target.name(), group.destinations().size());
+        return new StreamEncoderGroup(solo, ffmpegExecutable, queueCapacity, reconnectPolicy,
+                sourceWidth, sourceHeight);
     }
 
     /** Recent FFmpeg output with credentials removed. */

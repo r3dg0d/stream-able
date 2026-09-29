@@ -21,7 +21,10 @@ import java.util.UUID;
  * <p>Destinations are partitioned into {@link StreamEncoderGroup}s by encode
  * profile, so compatible destinations share one encoder and one encode. Each
  * group fails, retries and recovers on its own - a dead Kick ingest does not
- * take Twitch and YouTube offline.</p>
+ * take Twitch and YouTube offline. A mid-stream tee slave that is marked
+ * {@link DestinationState#ERROR} can also be recovered via
+ * {@link #reconnectDestination(UUID)} onto a dedicated encoder without
+ * restarting healthy siblings.</p>
  *
  * <p><b>Threading:</b> {@link #submitFrame} is called from the render thread and
  * must never block; everything it touches is a bounded queue. Lifecycle methods
@@ -273,13 +276,43 @@ public final class StreamController {
                 && active.stream().allMatch(d -> d.state() == DestinationState.ERROR);
     }
 
-    /** Restarts one destination's group without disturbing the others. */
+    /**
+     * Reconnects one destination.
+     *
+     * <p>When the destination owns its encoder alone, or every sibling has also
+     * failed, the shared group is restarted. When it failed inside a live tee
+     * while siblings are still {@link DestinationState#LIVE}, it is split onto a
+     * dedicated encoder so healthy slaves are not torn down.</p>
+     */
     public boolean reconnectDestination(UUID destinationId) {
-        for (StreamEncoderGroup group : groups) {
-            if (group.destinations().stream().anyMatch(d -> d.id().equals(destinationId))) {
-                totalReconnects++;
-                return group.restart(audioEnabled) == null;
+        for (int i = 0; i < groups.size(); i++) {
+            StreamEncoderGroup group = groups.get(i);
+            StreamDestination target = null;
+            for (StreamDestination destination : group.destinations()) {
+                if (destination.id().equals(destinationId)) {
+                    target = destination;
+                    break;
+                }
             }
+            if (target == null) {
+                continue;
+            }
+            totalReconnects++;
+            if (TeeRecovery.shouldSplitOff(target, group.destinations())) {
+                StreamEncoderGroup solo = group.splitOffForRecovery(destinationId);
+                if (solo == null) {
+                    return false;
+                }
+                String error = solo.start(audioEnabled);
+                groups.add(solo);
+                if (error != null) {
+                    StreamAbleLog.STREAMING.warn("Solo tee recovery failed for {}: {}",
+                            target.name(), error);
+                    return false;
+                }
+                return true;
+            }
+            return group.restart(audioEnabled) == null;
         }
         return false;
     }
