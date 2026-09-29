@@ -21,7 +21,15 @@ package dev.streamable.browser.css;
  * blending.</p>
  *
  * <p>Both blocks are re-applied on every load, and are idempotent: they replace
- * their previous element rather than stacking up.</p>
+ * their previous element rather than stacking up. The injection script also
+ * waits for {@code DOMContentLoaded} when the document is still loading, and
+ * installs a one-shot {@code MutationObserver} that re-applies the blocks if a
+ * SPA clears {@code <head>} (widgets that rebuild the document tree used to go
+ * opaque until the next full navigation).</p>
+ *
+ * <p>User CSS is clamped to {@link #MAX_USER_CSS_CHARS} before it is escaped
+ * into the script, matching the size discipline of the browser audio tap: a
+ * saved config must not hand CEF a multi-megabyte {@code executeJavaScript}.</p>
  */
 public final class BrowserCssInjector {
 
@@ -31,14 +39,24 @@ public final class BrowserCssInjector {
     public static final String USER_STYLE_ID = "streamable-user-css";
 
     /**
+     * Hard cap on user CSS characters (UTF-16 Java length). Large enough for
+     * real overlay stylesheets; small enough that the escaped JS stays cheap
+     * to ship across the CEF boundary on every load.
+     */
+    public static final int MAX_USER_CSS_CHARS = 65_536;
+
+    /**
      * Forced transparency. {@code html} is included as well as {@code body}
      * because a page that only clears {@code body} still shows the root
-     * element's default white.
+     * element's default white. {@code background-image} is cleared too: many
+     * widgets paint an opaque wallpaper via {@code url(...)} rather than a
+     * solid colour.
      */
     public static final String TRANSPARENCY_BASE_CSS = """
             html, body {
                 background: transparent !important;
                 background-color: rgba(0, 0, 0, 0) !important;
+                background-image: none !important;
             }
             """;
 
@@ -46,21 +64,62 @@ public final class BrowserCssInjector {
     }
 
     /**
-     * Builds a self-contained script that installs both style blocks.
+     * Clamps user CSS to {@link #MAX_USER_CSS_CHARS}. Null becomes empty.
+     * Truncation is silent at the storage boundary; Studio can surface length
+     * separately if an editor is added later.
+     */
+    public static String clampUserCss(String userCss) {
+        if (userCss == null || userCss.isEmpty()) {
+            return "";
+        }
+        if (userCss.length() <= MAX_USER_CSS_CHARS) {
+            return userCss;
+        }
+        return userCss.substring(0, MAX_USER_CSS_CHARS);
+    }
+
+    /**
+     * Builds a self-contained script that installs both style blocks and keeps
+     * them alive across SPA head rebuilds.
      *
-     * @param userCss the source's custom CSS; may be blank
+     * @param userCss the source's custom CSS; may be blank; oversized input is clamped
      */
     public static String buildInjectionScript(String userCss) {
-        String user = userCss == null ? "" : userCss;
+        String user = clampUserCss(userCss);
+        // CSS payloads live on window.__streamableCss so a later applyCss()
+        // updates what the MutationObserver re-installs (the observer itself
+        // is installed only once per document).
         return "(function(){"
+                + "var BASE='" + BASE_STYLE_ID + "';"
+                + "var USER='" + USER_STYLE_ID + "';"
+                + "window.__streamableCss={base:" + toJsString(TRANSPARENCY_BASE_CSS)
+                + ",user:" + toJsString(user) + "};"
                 + "var set=function(id,css){"
-                + "var d=document;if(!d.head&&!d.documentElement)return;"
+                + "var d=document;if(!d.documentElement)return false;"
+                + "var parent=d.head||d.documentElement;"
                 + "var e=d.getElementById(id);"
-                + "if(!e){e=d.createElement('style');e.id=id;e.type='text/css';"
-                + "(d.head||d.documentElement).appendChild(e);}"
-                + "e.textContent=css;};"
-                + "set('" + BASE_STYLE_ID + "'," + toJsString(TRANSPARENCY_BASE_CSS) + ");"
-                + "set('" + USER_STYLE_ID + "'," + toJsString(user) + ");"
+                + "if(!e){e=d.createElement('style');e.id=id;e.type='text/css';parent.appendChild(e);}"
+                + "else if(e.parentNode!==parent){parent.appendChild(e);}"
+                + "if(e.textContent!==css)e.textContent=css;"
+                + "return true;};"
+                + "var apply=function(){"
+                + "var c=window.__streamableCss||{};"
+                + "set(BASE,c.base||'');"
+                + "set(USER,c.user||'');"
+                + "};"
+                + "apply();"
+                + "if(document.readyState==='loading'){"
+                + "document.addEventListener('DOMContentLoaded',apply,{once:true});"
+                + "}"
+                + "if(!window.__streamableCssGuard){"
+                + "window.__streamableCssGuard=1;"
+                + "try{"
+                + "var mo=new MutationObserver(function(){"
+                + "if(!document.getElementById(BASE)||!document.getElementById(USER))apply();"
+                + "});"
+                + "mo.observe(document.documentElement,{childList:true,subtree:true});"
+                + "}catch(e){}"
+                + "}"
                 + "})();";
     }
 

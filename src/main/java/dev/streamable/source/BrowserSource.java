@@ -1,5 +1,6 @@
 package dev.streamable.source;
 
+import dev.streamable.browser.css.BrowserCssInjector;
 import dev.streamable.source.transform.SourceTransform;
 
 import java.util.Objects;
@@ -158,7 +159,7 @@ public final class BrowserSource implements StreamSource {
     }
 
     public void setCustomCss(String customCss) {
-        this.customCss = customCss == null ? "" : customCss;
+        this.customCss = BrowserCssInjector.clampUserCss(customCss);
     }
 
     public int browserFps() {
@@ -214,7 +215,7 @@ public final class BrowserSource implements StreamSource {
     public BrowserSource duplicate() {
         BrowserSource copy = new BrowserSource(UUID.randomUUID(), name + " (copy)", url,
                 transform.translated(24, 24));
-        copy.customCss = customCss;
+        copy.setCustomCss(customCss);
         copy.visible = visible;
         copy.locked = locked;
         copy.opacity = opacity;

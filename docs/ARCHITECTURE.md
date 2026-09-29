@@ -101,7 +101,18 @@ at the voice range from positions cached on the client tick; static (group)
 voices are unfaded. Plasmo Voice uses its client addon API. Either mod's
 microphone can be the mic source, via `MicrophoneRouting`.
 
+### Browser CSS (`browser/css`)
+`BrowserCssInjector` builds the main-frame script that installs two idempotent
+`<style>` blocks (forced transparency with `!important`, then user CSS). User
+CSS is clamped to 64 KiB before escaping. The script stores payloads on
+`window.__streamableCss`, applies immediately, retries on `DOMContentLoaded`
+when the document is still loading, and installs a one-shot `MutationObserver`
+so SPA widgets that rebuild `<head>` cannot leave the overlay opaque until the
+next navigation. Load-handler re-injection on every main-frame `onLoadEnd`
+still covers full navigations and redirects.
+
 ### Browser audio (`browser/audio`)
+
 JCEF in MCEF Modern has no `CefAudioHandler`, so `audio-tap.js` runs inside each
 frame. It patches `AudioNode.prototype.connect/disconnect` so anything connected to
 a live destination goes through a per-context hub (volume → monitor gain →

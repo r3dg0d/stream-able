@@ -90,7 +90,7 @@ Recording and streaming are separate state machines that share only the composed
 Getting a web overlay to composite correctly takes four things, and CSS is only one of them:
 
 1. **The browser is created transparent.** Stream-able passes `transparent = true` to MCEF, so CEF produces a BGRA buffer with a real alpha channel.
-2. **CSS is injected on every page load**: a forced-transparency base, then your own CSS on top, so redirects and widget reloads stay transparent.
+2. **CSS is injected on every page load**: a forced-transparency base (clears background colour and image), then your own CSS on top (clamped to 64 KiB). The script re-applies after `DOMContentLoaded` and if a SPA clears `<head>`, so redirects and widget reloads stay transparent.
 3. **The pixel path preserves alpha** - CEF buffer, `GL_BGRA` upload, RGBA8 texture, compositor shader, program framebuffer.
 4. **Blending is premultiplied.** If overlay edges ever look haloed, flip **Advanced > Browser pages use premultiplied alpha**.
 
@@ -226,8 +226,8 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 What has been checked, and how (Stream-able **1.3.0** on Minecraft **26.2**):
 
 - **Unit and integration tests** (`./gradlew test`, 56 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, parsing of browser audio chunks, the disk-space
-  guardian thresholds, and Stream Health findings for a broken GPU capture /
-  readback-skip backlog.
+  guardian thresholds, Stream Health findings for a broken GPU capture /
+  readback-skip backlog, and browser CSS injector clamp / SPA re-apply guards.
 - **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters; Simple Voice Chat 2.6.24 loading the plugin and connecting in singleplayer (no second player, so incoming voices were tested by unit tests only); the replay buffer starting on world join and saving a 20 s clip with aligned audio and video; the watermark in a recorded frame; browser-source audio in a recording (a Web Audio tone and an `<audio>` element tone from a test page, both measured in the file).
 - **Not verified at runtime**: automatic clip triggers in a real session (the trigger logic is unit-tested), a browser source's "Recording & stream only" mode being silent on speakers (the test display had no audio device), browser audio on a live stream rather than a recording.
 - **CI on Windows**: unit/integration tests and jar build run on `windows-latest` (Temurin 25). A live Windows Minecraft client session is still unverified — see [`docs/WINDOWS.md`](docs/WINDOWS.md) and [#3](https://github.com/r3dg0d/stream-able/issues/3) for the smoke checklist and platform quirks.

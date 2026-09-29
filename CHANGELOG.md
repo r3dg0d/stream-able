@@ -16,6 +16,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   and a free-space floor; Stream Health already reported time-remaining.
 
 ### Improved
+- **Browser CSS injector hardening**: user CSS is clamped to 64 KiB before
+  injection; the page script waits for `DOMContentLoaded` when the document is
+  still loading, keeps payloads on `window.__streamableCss`, and installs a
+  one-shot `MutationObserver` so SPA head rebuilds cannot strip transparency.
+  The forced-transparency base also clears `background-image`.
 - Stream Health always lists **Readback skips** and **Buffers exhausted** per
   active output (not only when delayed), so backlog is visible before a stall
   finding appears.

@@ -12,6 +12,15 @@ class BrowserCssInjectorTest {
         assertTrue(script.contains(BrowserCssInjector.BASE_STYLE_ID));
         assertTrue(script.contains(BrowserCssInjector.USER_STYLE_ID));
         assertTrue(script.contains("background"), "forced transparency must be present");
+        assertTrue(script.contains("window.__streamableCss"), "payload lives on window for SPA re-apply");
+    }
+
+    @Test
+    void injectionScriptRetriesWhileLoadingAndGuardsSpaHeadClears() {
+        String script = BrowserCssInjector.buildInjectionScript("");
+        assertTrue(script.contains("DOMContentLoaded"), "must wait when document is still loading");
+        assertTrue(script.contains("MutationObserver"), "must re-apply after SPA head rebuilds");
+        assertTrue(script.contains("__streamableCssGuard"), "observer installs once per document");
     }
 
     @Test
@@ -20,6 +29,8 @@ class BrowserCssInjectorTest {
         assertTrue(BrowserCssInjector.TRANSPARENCY_BASE_CSS.contains("html"));
         assertTrue(BrowserCssInjector.TRANSPARENCY_BASE_CSS.contains("body"));
         assertTrue(BrowserCssInjector.TRANSPARENCY_BASE_CSS.contains("!important"));
+        assertTrue(BrowserCssInjector.TRANSPARENCY_BASE_CSS.contains("background-image"),
+                "opaque wallpaper images must be cleared too");
     }
 
     @Test
@@ -46,7 +57,7 @@ class BrowserCssInjectorTest {
 
     @Test
     void escapesLineSeparatorsAndNonAscii() {
-        String escaped = BrowserCssInjector.toJsString("café x");
+        String escaped = BrowserCssInjector.toJsString("café\u2028x");
         assertTrue(escaped.contains("\\u00E9"));
         assertTrue(escaped.contains("\\u2028"));
     }
@@ -55,6 +66,20 @@ class BrowserCssInjectorTest {
     void handlesEmptyAndNullCss() {
         assertNotNull(BrowserCssInjector.buildInjectionScript(null));
         assertNotNull(BrowserCssInjector.buildInjectionScript(""));
+        assertEquals("", BrowserCssInjector.clampUserCss(null));
+        assertEquals("", BrowserCssInjector.clampUserCss(""));
+    }
+
+    @Test
+    void clampsOversizedUserCssBeforeInjection() {
+        String huge = "a".repeat(BrowserCssInjector.MAX_USER_CSS_CHARS + 2_048);
+        assertEquals(BrowserCssInjector.MAX_USER_CSS_CHARS, BrowserCssInjector.clampUserCss(huge).length());
+        String script = BrowserCssInjector.buildInjectionScript(huge);
+        // Each 'a' survives escaping unchanged; the user payload must be the
+        // clamped run, never the oversized original (base CSS may add a few more).
+        assertTrue(script.contains("a".repeat(BrowserCssInjector.MAX_USER_CSS_CHARS)));
+        assertFalse(script.contains("a".repeat(BrowserCssInjector.MAX_USER_CSS_CHARS + 1)),
+                "injection script must not embed unclamped CSS");
     }
 
     @Test
