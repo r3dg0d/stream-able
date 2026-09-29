@@ -2,6 +2,12 @@
 
 All notable changes to Stream-able. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **GitHub Actions CI** (`.github/workflows/ci.yml`): version-sync (`mod_version` ↔ CHANGELOG)
+  plus Temurin 25 `./gradlew test` and remapped jar build on every push / PR to `main`.
+
 ## 1.1.0 - 2026-09-24
 
 A large feature release. Existing configs migrate automatically (schema 1 to 2);

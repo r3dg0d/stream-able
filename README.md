@@ -1,5 +1,7 @@
 # Stream-able
 
+[![CI](https://github.com/r3dg0d/stream-able/actions/workflows/ci.yml/badge.svg)](https://github.com/r3dg0d/stream-able/actions/workflows/ci.yml)
+
 **An OBS-like recording, livestreaming and multistreaming studio that runs inside Minecraft.**
 
 Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-able) by JoEusebe. It keeps the recorder and adds what you need to actually go live: RTMP/RTMPS streaming, multistreaming, interactive Chromium **browser sources** composited over gameplay, a professional microphone chain with local AI noise cancellation, and first-class ultrawide support - without a second application on your machine.
@@ -240,6 +242,8 @@ What has been checked, and how (Stream-able 1.1.0):
 ```
 
 Every dependency is pinned in `gradle.properties`. Minecraft 26.x ships deobfuscated, so the buildscript declares no mapping layer.
+
+GitHub Actions runs `./gradlew test` and `./gradlew build -x test` on Temurin 25 for every push and pull request to `main`. ONNX model and DSP benchmark suites stay opt-in (`STREAMABLE_MODEL_DIR`, `-Dstreamable.benchmarks=true`) and skip when unset.
 
 ---
 
