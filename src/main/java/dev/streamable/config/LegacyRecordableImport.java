@@ -76,7 +76,8 @@ public final class LegacyRecordableImport {
             imported += boolField(root, "replayBufferEnabled", v -> recording.replayBufferEnabled = v);
             imported += intField(root, "replayBufferDurationSeconds", v -> recording.replayBufferSeconds = v);
             // showOverlay / overlayScale belonged to Record-able's recording
-            // overlay; Stream HUD replaced it, so those keys are ignored.
+            // overlay; Stream HUD replaced it. killMontages / deferredCapture*
+            // were never wired in Stream-able. Those keys are ignored.
             // "audioSource" was game / mic / both in Record-able.
             imported += stringField(root, "audioSource", v -> {
                 String mode = v.toLowerCase(Locale.ROOT);

@@ -4,6 +4,14 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Removed
+- **Dead Record-able carry-over config**: `killMontages` and deferred-capture
+  fields (`deferredCapture`, `deferredCaptureFps`, `deferredOutputFps`,
+  `deferredInterpolation`) were never wired and never shown in Studio. Dropped
+  from settings; stale JSON keys are ignored on load (same pattern as the
+  retired recording-overlay fields). Automatic kill clips remain via
+  `autoClipOnKill`.
+
 ## 1.3.2 - 2026-09-29
 
 Stream HUD polish (cycles 17–19) on Minecraft 26.2.

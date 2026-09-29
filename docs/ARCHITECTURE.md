@@ -223,6 +223,10 @@ Runtime and the three models are all `ManagedRuntime`s.
 files: the old single output size becomes independent canvas / recording / streaming
 outputs, and the old microphone gain and noise toggle map onto the new chain. Files
 are written atomically and are `chmod 600` on POSIX when they contain a stream key.
+Gson ignores unknown JSON keys on load, so retired Record-able carry-overs
+(`killMontages`, deferred-capture fields, recording-overlay fields) drop out of
+`stream-able.json` on the next save. `LegacyRecordableImport` maps a surviving
+`recordable.json` into recording settings and likewise skips those retirees.
 
 ## UI (`ui/`)
 

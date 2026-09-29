@@ -102,12 +102,11 @@ public final class RecordingSettings {
     /** Manual A/V nudge in milliseconds, on top of the measured start offset. */
     public int audioDelayMs = 0;
 
-    // Replay buffer and automatic clips: see recording/replay. killMontages and
-    // deferred capture are carried over from Record-able so configs round-trip,
-    // but are not implemented and not shown. The old recording-overlay fields
-    // (showOverlay / overlayScale / overlayPosition) were retired — Stream HUD
-    // replaced them. watermarkEnabled/watermarkText only seed the new
-    // video.watermark once (see StreamAbleConfig.validate).
+    // Replay buffer and automatic clips: see recording/replay. Dead Record-able
+    // carry-overs (killMontages, deferred capture, recording-overlay) were
+    // retired — never wired in Stream-able; stale JSON keys are ignored on
+    // load. watermarkEnabled/watermarkText only seed the new video.watermark
+    // once (see StreamAbleConfig.validate).
 
     // ---- replay buffer and clips ------------------------------------------
     public boolean replayBufferEnabled = false;
@@ -116,13 +115,6 @@ public final class RecordingSettings {
     public boolean autoClipOnAdvancement = false;
     public boolean autoClipOnKill = false;
     public boolean autoClipOnDimensionChange = false;
-    public boolean killMontages = false;
-
-    // ---- deferred capture --------------------------------------------------
-    public boolean deferredCapture = false;
-    public int deferredCaptureFps = 15;
-    public int deferredOutputFps = 60;
-    public boolean deferredInterpolation = false;
 
     // ---- watermark seed (migrated into video.watermark on validate) --------
     public boolean watermarkEnabled = false;
@@ -139,8 +131,6 @@ public final class RecordingSettings {
         audioBitrateKbps = Math.clamp(audioBitrateKbps, 32, 1024);
         audioDelayMs = Math.clamp(audioDelayMs, -5000, 5000);
         replayBufferSeconds = Math.clamp(replayBufferSeconds, 5, 600);
-        deferredCaptureFps = Math.clamp(deferredCaptureFps, 1, 60);
-        deferredOutputFps = Math.clamp(deferredOutputFps, 15, 240);
         maxFileSizeMb = Math.max(0, maxFileSizeMb);
         diskSpaceBlockPercent = Math.clamp(diskSpaceBlockPercent, 50, 100);
         diskSpaceWarnPercent = Math.clamp(diskSpaceWarnPercent, 1, diskSpaceBlockPercent - 1);

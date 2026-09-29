@@ -261,4 +261,42 @@ class ConfigIoTest {
     }
 
 
+
+    @Test
+    void retiredKillMontagesAndDeferredCaptureKeysAreIgnoredAndDroppedOnSave(@TempDir Path dir)
+            throws IOException {
+        // Pre-1.3.3 (and Record-able) configs may still carry these never-wired fields.
+        String json = """
+                {
+                  "schemaVersion": 2,
+                  "recording": {
+                    "fps": 60,
+                    "killMontages": true,
+                    "deferredCapture": true,
+                    "deferredCaptureFps": 12,
+                    "deferredOutputFps": 120,
+                    "deferredInterpolation": true,
+                    "showRecordingOverlay": false,
+                    "overlayPosition": 2,
+                    "overlayScale": 1.5
+                  }
+                }
+                """;
+        Files.writeString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), json, StandardCharsets.UTF_8);
+
+        StreamAbleConfig loaded = ConfigIo.load(dir);
+        assertEquals(60, loaded.recording.fps, "known fields still load");
+        ConfigIo.save(dir, loaded);
+
+        String saved = Files.readString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), StandardCharsets.UTF_8);
+        for (String retired : new String[] {
+                "killMontages", "deferredCapture", "deferredCaptureFps",
+                "deferredOutputFps", "deferredInterpolation",
+                "showRecordingOverlay", "overlayPosition", "overlayScale"
+        }) {
+            assertFalse(saved.contains("\"" + retired + "\""),
+                    "retired key must not be rewritten: " + retired);
+        }
+    }
+
 }
