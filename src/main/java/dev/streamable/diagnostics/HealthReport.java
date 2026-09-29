@@ -3,6 +3,7 @@ package dev.streamable.diagnostics;
 import dev.streamable.audio.ai.NoiseCancellationManager;
 import dev.streamable.audio.mic.MicrophoneProcessor;
 import dev.streamable.pipeline.VideoPipeline;
+import dev.streamable.streaming.DestinationState;
 import dev.streamable.streaming.StreamHealth;
 
 import java.util.ArrayList;
@@ -136,11 +137,44 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                 findings.add(new Finding(queue, "Network queue is repeatedly filling: the connection or encoder "
                         + "cannot keep up with " + target + " kbps."));
             }
-            network = bitrateSeverity == Severity.WARNING || queue == Severity.CRITICAL || falling ? Condition.POOR
-                    : queue == Severity.WARNING || stream.reconnects() > 0 ? Condition.FAIR : Condition.GOOD;
+
+            int errorCount = 0;
+            int reconnectingCount = 0;
+            for (StreamHealth.DestinationStatus destination : stream.destinations()) {
+                if (destination.state() == DestinationState.ERROR) {
+                    errorCount++;
+                    String detail = destination.detail() == null ? "" : destination.detail().trim();
+                    findings.add(new Finding(Severity.CRITICAL,
+                            detail.isEmpty()
+                                    ? destination.name() + " dropped and is no longer publishing."
+                                    : destination.name() + " dropped: " + detail));
+                } else if (destination.state() == DestinationState.RECONNECTING) {
+                    reconnectingCount++;
+                    String detail = destination.detail() == null ? "" : destination.detail().trim();
+                    findings.add(new Finding(Severity.WARNING,
+                            detail.isEmpty()
+                                    ? destination.name() + " is reconnecting."
+                                    : destination.name() + ": " + detail));
+                }
+            }
+            if (!stream.destinations().isEmpty()) {
+                metrics.add(new Metric("Stream", "Destinations",
+                        stream.liveDestinationCount() + " live / " + stream.destinations().size()
+                                + (errorCount > 0 ? (" (" + errorCount + " failed)") : ""),
+                        "Per-row status after tee / reconnect. A mid-stream slave drop marks only that destination.",
+                        errorCount > 0 ? Severity.CRITICAL
+                                : reconnectingCount > 0 ? Severity.WARNING : Severity.OK));
+            }
+
+            network = bitrateSeverity == Severity.WARNING || queue == Severity.CRITICAL || falling
+                    || errorCount > 0 ? Condition.POOR
+                    : queue == Severity.WARNING || stream.reconnects() > 0 || reconnectingCount > 0
+                    ? Condition.FAIR : Condition.GOOD;
             if (stream.liveDestinationCount() == 0) {
-                network = Condition.FAIR;
-                findings.add(new Finding(Severity.INFO, "Connecting to destinations..."));
+                network = errorCount > 0 ? Condition.POOR : Condition.FAIR;
+                if (errorCount == 0) {
+                    findings.add(new Finding(Severity.INFO, "Connecting to destinations..."));
+                }
             }
         }
 

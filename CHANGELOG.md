@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Improved
+- **Stream Health destination findings**: mid-stream tee slave drops and
+  reconnecting rows are named in Stream Health findings (and network condition
+  drops to Fair/Poor). A session with one failed destination no longer claims
+  "Everything is running smoothly." Destination live/failed counts appear as a
+  metric.
 - **Per-destination tee reporting**: when FFmpeg's `tee` muxer logs a slave
   failure while `onfail=ignore` keeps the encoder alive, Stream-able attributes
   the stderr line to the named destination and marks only that row

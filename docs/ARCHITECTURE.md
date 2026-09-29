@@ -63,7 +63,10 @@ Compatible destinations share one FFmpeg process via the `tee` muxer
 (`onfail=ignore` per slave). `streaming/TeeSlaveAttributor` maps redacted stderr
 error lines onto named destinations so a mid-stream slave drop marks only that
 row `ERROR` while siblings stay `LIVE`; a full process death still reconnects the
-group as a unit (`StreamEncoderGroup` + `ReconnectPolicy`).
+group as a unit (`StreamEncoderGroup` + `ReconnectPolicy`). `diagnostics/HealthReport`
+turns those ERROR / RECONNECTING rows into Stream Health findings and Fair/Poor
+network condition so a partial tee drop is never reported as "Everything is
+running smoothly."
 
 ## Audio path
 
