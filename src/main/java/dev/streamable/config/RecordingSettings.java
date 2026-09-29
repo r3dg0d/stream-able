@@ -76,6 +76,14 @@ public final class RecordingSettings {
     public long maxFileSizeMb = 0;              // 0 = unlimited
     public boolean autoStopAtMaxSize = true;
 
+    // ---- disk space guardian ----------------------------------------------
+    /** Used-% at which Studio / Health warn that the volume is filling. */
+    public int diskSpaceWarnPercent = 90;
+    /** Used-% at which a recording will not start (and an active one stops). */
+    public int diskSpaceBlockPercent = 95;
+    /** Absolute free-space floor (MiB) that triggers a warning. */
+    public int diskSpaceMinFreeMb = 500;
+
     // ---- audio -------------------------------------------------------------
     public boolean captureGameAudio = true;
     public boolean captureMicrophone = false;
@@ -138,6 +146,9 @@ public final class RecordingSettings {
         overlayScale = (float) Math.clamp(overlayScale, 0.5, 2.0);
         overlayPosition = Math.clamp(overlayPosition, 0, 4);
         maxFileSizeMb = Math.max(0, maxFileSizeMb);
+        diskSpaceBlockPercent = Math.clamp(diskSpaceBlockPercent, 50, 100);
+        diskSpaceWarnPercent = Math.clamp(diskSpaceWarnPercent, 1, diskSpaceBlockPercent - 1);
+        diskSpaceMinFreeMb = Math.clamp(diskSpaceMinFreeMb, 100, 1_000_000);
         if (container == null) {
             container = Container.MP4;
         }
@@ -160,4 +171,5 @@ public final class RecordingSettings {
             watermarkText = "";
         }
     }
+
 }

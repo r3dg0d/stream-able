@@ -123,6 +123,14 @@ is registered (with a timeout fallback). JCEF fixes a browser's handlers and
 message routers at creation, so a throwaway browser installs them on MCEF's
 shared client before the first real source.
 
+### Disk space (`recording/DiskSpaceGuardian`)
+Before a recording starts, and every 5 s while one is active, Stream-able
+queries the recordings volume's usable space. Configurable warn / block used-%
+and a free-space floor live on `RecordingSettings`; under 100 MB free always
+blocks. A blocked start returns the message as `lastError`; a mid-recording
+block asks `StreamAbleClient` to stop (same path as the size limit). Threshold
+math is pure (`evaluate`) so unit tests do not need a real `FileStore`.
+
 ### Replay buffer (`recording/replay`)
 `ReplayBuffer` runs a third output through FFmpeg's segment muxer: 2 s MPEG-TS
 segments with forced keyframes on every boundary, wrapping after the configured
@@ -203,7 +211,7 @@ are written atomically and are `chmod 600` on POSIX when they contain a stream k
 
 ## Minecraft 26.2 call sites
 
-Stream-able 1.2.0 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
+Stream-able 1.3.0 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
 surfaces changed relative to 26.1.x; the live code goes through these helpers
 so the rest of the tree stays readable:
 

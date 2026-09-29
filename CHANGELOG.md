@@ -4,6 +4,16 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Added
+- **Disk space guardian**: Recording refuses to start (and an active recording
+  stops) when the recordings volume is at the configured block threshold or
+  under 100 MB free. Studio → Recording shows free space, warn/block used-%
+  and a free-space floor; Stream Health already reported time-remaining.
+
+### Fixed
+- Disk guardian messages no longer carry Minecraft formatting codes or emoji
+  (plain language for Studio notices and `lastError`).
+
 ## 1.3.0 - 2026-09-29
 
 Streaming reliability (cycles 4–11) on Minecraft 26.2.

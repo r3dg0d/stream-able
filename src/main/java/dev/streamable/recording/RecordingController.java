@@ -76,6 +76,9 @@ public final class RecordingController {
     private long maxFileSizeBytes;
     private boolean autoStopAtMaxSize;
     private volatile boolean stopRequestedBySizeLimit;
+    private DiskSpaceGuardian.Thresholds diskThresholds = DiskSpaceGuardian.Thresholds.DEFAULT;
+    private long nextDiskCheckMillis;
+    private volatile boolean stopRequestedByDisk;
 
     public RecordingController(FFmpegManager ffmpeg, FFmpegCapabilityProbe probe, Path gameDirectory, AudioMixer mixer) {
         this.ffmpeg = ffmpeg;
@@ -157,11 +160,26 @@ public final class RecordingController {
             lastError = invalid;
             return invalid;
         }
+        directory = outputDirectory(settings);
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException e) {
+            lastError = "Could not create the recordings folder: " + e.getMessage();
+            return lastError;
+        }
+        diskThresholds = new DiskSpaceGuardian.Thresholds(
+                settings.diskSpaceWarnPercent, settings.diskSpaceBlockPercent,
+                settings.diskSpaceMinFreeMb).clamped();
+        DiskSpaceGuardian.DiskCheckResult disk = DiskSpaceGuardian.check(directory, diskThresholds);
+        if (disk.status() == DiskSpaceGuardian.DiskStatus.BLOCKED) {
+            lastError = disk.message();
+            return lastError;
+        }
+        if (disk.status() == DiskSpaceGuardian.DiskStatus.WARNING) {
+            StreamAbleLog.RECORDING.warn(disk.message());
+        }
         state = State.STARTING;
         try {
-            directory = outputDirectory(settings);
-            Files.createDirectories(directory);
-
             String stamp = LocalDateTime.now().format(FILE_TIMESTAMP);
             String extension = settings.container.extension;
             videoFile = directory.resolve("stream-able-" + stamp + "-video." + extension);
@@ -178,6 +196,8 @@ public final class RecordingController {
             maxFileSizeBytes = settings.maxFileSizeMb > 0 ? settings.maxFileSizeMb * 1_048_576L : 0;
             autoStopAtMaxSize = settings.autoStopAtMaxSize;
             stopRequestedBySizeLimit = false;
+            stopRequestedByDisk = false;
+            nextDiskCheckMillis = 0;
 
             List<String> command = FFmpegCommandBuilder.buildRecordingCommand(
                     ffmpeg.executable(), activeVideoProfile, output.width(), output.height(),
@@ -280,13 +300,31 @@ public final class RecordingController {
         }
     }
 
-    /** Client-tick housekeeping: file-size limit. */
+    /**
+     * Client-tick housekeeping: file-size and disk-space limits.
+     *
+     * @return {@code true} when the caller should stop the recording (size or disk)
+     */
     public boolean tick() {
-        if (state == State.RECORDING && maxFileSizeBytes > 0 && autoStopAtMaxSize
+        if (state != State.RECORDING) {
+            return false;
+        }
+        if (maxFileSizeBytes > 0 && autoStopAtMaxSize
                 && currentFileSizeBytes() >= maxFileSizeBytes && !stopRequestedBySizeLimit) {
             stopRequestedBySizeLimit = true;
             lastError = "Recording stopped at the configured size limit.";
             return true;   // caller stops through the runtime so audio and outputs detach too
+        }
+        long now = System.currentTimeMillis();
+        if (!stopRequestedByDisk && now >= nextDiskCheckMillis) {
+            nextDiskCheckMillis = now + 5_000;
+            Path dir = directory != null ? directory : gameDirectory;
+            DiskSpaceGuardian.DiskCheckResult disk = DiskSpaceGuardian.check(dir, diskThresholds);
+            if (disk.status() == DiskSpaceGuardian.DiskStatus.BLOCKED) {
+                stopRequestedByDisk = true;
+                lastError = "Recording stopped: " + disk.message();
+                return true;
+            }
         }
         return false;
     }

@@ -2,6 +2,7 @@ package dev.streamable.ui.studio;
 
 import dev.streamable.StreamAbleClient;
 import dev.streamable.config.RecordingSettings;
+import dev.streamable.recording.DiskSpaceGuardian;
 import dev.streamable.ffmpeg.AudioCodec;
 import dev.streamable.ffmpeg.FFmpegCapabilityProbe;
 import dev.streamable.ffmpeg.RateControl;
@@ -65,6 +66,38 @@ final class RecordingPage {
                 v -> rec.maxFileSizeMb = v, 0, 1_000_000));
         file.add(new Widgets.Notice(() -> rec.container.problemWith(client.recording().plannedEncoder(rec), rec.audioCodec),
                 () -> Theme.DANGER));
+        file.add(new Label(() -> {
+            Path dir = client.recording().outputDirectory(rec);
+            String free = DiskSpaceGuardian.getFormattedFreeSpace(dir);
+            return "Free space on the recordings volume: " + free + ".";
+        }).color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION));
+        file.add(new Widgets.Notice(() -> {
+            Path dir = client.recording().outputDirectory(rec);
+            DiskSpaceGuardian.DiskCheckResult disk = DiskSpaceGuardian.check(dir,
+                    new DiskSpaceGuardian.Thresholds(rec.diskSpaceWarnPercent, rec.diskSpaceBlockPercent,
+                            rec.diskSpaceMinFreeMb));
+            return disk.status() == DiskSpaceGuardian.DiskStatus.OK ? null : disk.message();
+        }, () -> {
+            Path dir = client.recording().outputDirectory(rec);
+            return DiskSpaceGuardian.check(dir,
+                    new DiskSpaceGuardian.Thresholds(rec.diskSpaceWarnPercent, rec.diskSpaceBlockPercent,
+                            rec.diskSpaceMinFreeMb)).status()
+                    == DiskSpaceGuardian.DiskStatus.BLOCKED ? Theme.DANGER : Theme.WARNING;
+        }));
+        Layouts.Grid diskLimits = file.add(new Layouts.Grid(170, Theme.SPACE_5));
+        diskLimits.add(s.intField("Warn at used %", () -> rec.diskSpaceWarnPercent, v -> {
+            rec.diskSpaceWarnPercent = v;
+            rec.validate();
+        }, 1, 99).tooltip("Studio warns when the recordings volume reaches this used percentage."));
+        diskLimits.add(s.intField("Block at used %", () -> rec.diskSpaceBlockPercent, v -> {
+            rec.diskSpaceBlockPercent = v;
+            rec.validate();
+        }, 50, 100).tooltip("A recording will not start (and an active one stops) at this used percentage, "
+                + "or when fewer than 100 MB are free."));
+        diskLimits.add(s.intField("Warn below free (MB)", () -> rec.diskSpaceMinFreeMb, v -> {
+            rec.diskSpaceMinFreeMb = v;
+            rec.validate();
+        }, 100, 1_000_000).tooltip("Also warn when free space drops below this absolute floor."));
         file.add(new Label(() -> "Size, scaling and frame rate are on the Video page: "
                 + client.recordingOutput().label() + " at " + rec.fps + " FPS.")
                 .color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION));
