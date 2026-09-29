@@ -207,4 +207,42 @@ class ConfigIoTest {
             assertFalse(permissions.contains(java.nio.file.attribute.PosixFilePermission.GROUP_READ));
         }
     }
+
+    @Test
+    void repairsThePreviousYouTubePresetToRtmps(@TempDir Path dir) throws IOException {
+        // Cycle 5 changed the YouTube preset to RTMPS; saved configs still hold
+        // the old plain-RTMP default and should be promoted on load.
+        String json = """
+                {
+                  "schemaVersion": 2,
+                  "streaming": { "destinations": [
+                    { "name": "YouTube", "platform": "YOUTUBE", "enabled": true,
+                      "ingestUrl": "rtmp://a.rtmp.youtube.com/live2",
+                      "streamKey": "abcd-efgh-ijkl-mnop" },
+                    { "name": "YouTube slash", "platform": "YOUTUBE", "enabled": true,
+                      "ingestUrl": "rtmp://a.rtmp.youtube.com/live2/",
+                      "streamKey": "abcd-efgh-ijkl-mnop" },
+                    { "name": "Deliberate RTMP", "platform": "YOUTUBE", "enabled": true,
+                      "ingestUrl": "rtmp://a.rtmp.youtube.com/live2/custom-app",
+                      "streamKey": "k" },
+                    { "name": "Twitch", "platform": "TWITCH", "enabled": true,
+                      "ingestUrl": "rtmp://live.twitch.tv/app", "streamKey": "live_1_x" }
+                  ] }
+                }
+                """;
+        Files.writeString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), json, StandardCharsets.UTF_8);
+
+        StreamAbleConfig config = ConfigIo.load(dir);
+        String expected = StreamPlatform.YOUTUBE.defaultIngestUrl();
+        assertTrue(expected.startsWith("rtmps://"), "preset must stay RTMPS");
+        assertEquals(expected, config.streaming.destinations.get(0).ingestUrl);
+        assertEquals(expected, config.streaming.destinations.get(1).ingestUrl);
+        assertEquals("rtmp://a.rtmp.youtube.com/live2/custom-app",
+                config.streaming.destinations.get(2).ingestUrl,
+                "a non-preset path must not be rewritten");
+        assertEquals("rtmp://live.twitch.tv/app",
+                config.streaming.destinations.get(3).ingestUrl);
+    }
+
+
 }

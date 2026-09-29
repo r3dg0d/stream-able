@@ -4,6 +4,19 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Fixed
+- **FFmpeg install hints** no longer point at retired gyan.dev / johnvansickle /
+  evermeet hosts; desktop platforms direct users to Studio → Components (managed
+  BtbN GPL build).
+- **Audio method labels** describe OpenAL loopback (game) + Java Sound (mic)
+  instead of DirectShow / PulseAudio / AVFoundation.
+- **YouTube preset migration**: saved `rtmp://a.rtmp.youtube.com/live2` destinations
+  are rewritten to the RTMPS default on load (exact former preset only).
+
+### Docs
+- `docs/WINDOWS.md`: Windows client smoke checklist and quirks for issue #3
+  (live client still unverified).
+
 ### Added
 - **Windows CI matrix**: GitHub Actions runs Temurin 25 `./gradlew test` and
   `build` on `ubuntu-latest` and `windows-latest` (jar artifact still uploaded

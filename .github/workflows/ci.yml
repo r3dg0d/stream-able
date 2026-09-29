@@ -70,6 +70,17 @@ jobs:
       - name: Build jar
         run: ./gradlew build -x test --no-daemon --stacktrace
 
+      - name: Assert jar name encodes versions
+        # Catches archiveFileName drift vs gradle.properties / version-sync.
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          ver=$(sed -n 's/^mod_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
+          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
+          jar="build/libs/stream-able-${ver}-mc${mc}-fabric.jar"
+          test -f "$jar"
+          echo "OK $jar"
+
       - name: Upload jar
         # One jar artifact from Linux is enough; Windows proves the same sources compile.
         if: runner.os == 'Linux'

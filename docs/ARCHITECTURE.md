@@ -204,3 +204,6 @@ Loom 1.17.21; Minecraft 26.x ships deobfuscated (mojmap), so there is no
 Yarn layer and no `remapJar` task. The release jar is named
 `stream-able-<ver>-mc26.2-fabric.jar`.
 
+## Platform notes
+
+- Windows client smoke checklist and quirks: [`WINDOWS.md`](WINDOWS.md) (issue #3).

@@ -261,15 +261,20 @@ public final class PlatformUtils {
 
     /**
      * Returns a platform-specific hint for installing FFmpeg.
+     *
+     * <p>Desktop platforms use the managed BtbN GPL build via the Studio
+     * <strong>Components</strong> page; the strings below must not advertise
+     * retired third-party hosts (gyan / johnvansickle / evermeet).</p>
      */
     public static String getFfmpegInstallHint() {
-        return switch (detectPlatform()) {
-            case WINDOWS -> "Click 'Download FFmpeg' in Stream-able settings (auto-downloads from gyan.dev), "
-                    + "or install manually from https://www.gyan.dev/ffmpeg/builds/ and add it to PATH.";
-            case LINUX -> "Click 'Download FFmpeg' in Stream-able settings (auto-downloads from johnvansickle.com), "
-                    + "or install via your package manager: sudo apt install ffmpeg / sudo dnf install ffmpeg / sudo pacman -S ffmpeg.";
-            case MACOS -> "Click 'Download FFmpeg' in Stream-able settings (auto-downloads from evermeet.cx), "
-                    + "or install via Homebrew: brew install ffmpeg.";
+        return ffmpegInstallHintFor(detectPlatform());
+    }
+
+    /** Package-visible so unit tests can assert every platform's wording. */
+    static String ffmpegInstallHintFor(Platform platform) {
+        return switch (platform) {
+            case WINDOWS, LINUX, MACOS -> "Open Studio → Components and install the managed FFmpeg "
+                    + "(BtbN GPL build), or place a compatible ffmpeg on PATH.";
             case ANDROID -> "Android auto-download is not supported. Install Termux and run 'pkg install ffmpeg', "
                     + "then set ffmpegPath to /data/data/com.termux/files/usr/bin/ffmpeg.";
             case UNKNOWN -> "Please install FFmpeg and ensure it is available in your system PATH.";
@@ -278,13 +283,21 @@ public final class PlatformUtils {
 
     /**
      * Returns a platform-specific description of the audio capture method.
+     *
+     * <p>Game audio is OpenAL loopback on every supported desktop / Android
+     * launcher; the microphone uses Java Sound. Older DirectShow / Pulse /
+     * AVFoundation labels described retired FFmpeg-device probes, not the
+     * primary capture path.</p>
      */
     public static String getAudioMethodDescription() {
-        return switch (detectPlatform()) {
-            case WINDOWS -> "DirectShow (Stereo Mix)";
-            case LINUX -> "PulseAudio";
-            case MACOS -> "AVFoundation";
-            case ANDROID -> "OpenAL Loopback (game audio)";
+        return audioMethodDescriptionFor(detectPlatform());
+    }
+
+    /** Package-visible so unit tests can assert every platform's wording. */
+    static String audioMethodDescriptionFor(Platform platform) {
+        return switch (platform) {
+            case WINDOWS, LINUX, MACOS -> "OpenAL loopback (game) + Java Sound (mic)";
+            case ANDROID -> "OpenAL loopback (game audio)";
             case UNKNOWN -> "Unknown";
         };
     }

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import dev.streamable.StreamAbleLog;
+import dev.streamable.streaming.StreamPlatform;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -102,9 +103,39 @@ public final class ConfigIo {
         }
     }
 
+
+    /**
+     * Promotes the previous YouTube preset ({@code rtmp://a.rtmp.youtube.com/live2})
+     * to the current RTMPS default.
+     *
+     * <p>Only the exact former preset URL is rewritten (optional trailing slash).
+     * A deliberate plain-RTMP fallback the user typed or pasted is left alone —
+     * that host remains documented and reachable.</p>
+     */
+    private static void repairYoutubeIngestUrls(StreamAbleConfig config) {
+        String target = StreamPlatform.YOUTUBE.defaultIngestUrl();
+        for (StreamingSettings.Destination destination : config.streaming.destinations) {
+            String url = destination.ingestUrl;
+            if (url == null) {
+                continue;
+            }
+            String trimmed = url.trim();
+            String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+            if (lower.equals("rtmp://a.rtmp.youtube.com/live2")
+                    || lower.equals("rtmp://a.rtmp.youtube.com/live2/")) {
+                destination.ingestUrl = target;
+                StreamAbleLog.CORE.info(
+                        "Updated YouTube ingest URL to RTMPS ({}); "
+                                + "plain rtmp://a.rtmp.youtube.com/live2 remains a documented fallback.",
+                        target);
+            }
+        }
+    }
+
     /** Applies schema migrations in order. */
     static void migrate(StreamAbleConfig config) {
         repairIvsIngestUrls(config);
+        repairYoutubeIngestUrls(config);
         if (config.schemaVersion < 1) {
             // Files written before the schema was versioned: nothing structural
             // changed, so validation alone brings them up to date.
