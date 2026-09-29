@@ -5,10 +5,20 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Added
+- **Capture health in Studio**: Studio → Video shows live GPU readback time,
+  capture FPS, PBO-ring skips and buffer-exhaust counts for Recording /
+  Streaming / Replay. A broken output (OpenGL capture disabled for the session)
+  is named on that page and as a Stream Health CRITICAL finding — sessions no
+  longer claim "Everything is running smoothly" when an output is dead.
 - **Disk space guardian**: Recording refuses to start (and an active recording
   stops) when the recordings volume is at the configured block threshold or
   under 100 MB free. Studio → Recording shows free space, warn/block used-%
   and a free-space floor; Stream Health already reported time-remaining.
+
+### Improved
+- Stream Health always lists **Readback skips** and **Buffers exhausted** per
+  active output (not only when delayed), so backlog is visible before a stall
+  finding appears.
 
 ### Fixed
 - Disk guardian messages no longer carry Minecraft formatting codes or emoji

@@ -123,6 +123,13 @@ is registered (with a timeout fallback). JCEF fixes a browser's handlers and
 message routers at creation, so a throwaway browser installs them on MCEF's
 shared client before the first real source.
 
+### Capture health (`compositor/OutputCapture` → Studio / Stream Health)
+Each output tracks average GPU readback time, PBO-ring skips (three in-flight
+readbacks) and buffer-pool exhaustion. `VideoPipeline.OutputStats.broken` is set
+when capture or collect throws; Stream Health emits a CRITICAL finding and the
+Video page's Capture health card shows Broken until the session is restarted.
+Healthy sessions still surface skip/exhaust metrics so backlog is visible early.
+
 ### Disk space (`recording/DiskSpaceGuardian`)
 Before a recording starts, and every 5 s while one is active, Stream-able
 queries the recordings volume's usable space. Configurable warn / block used-%

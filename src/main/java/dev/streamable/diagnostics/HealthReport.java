@@ -63,6 +63,19 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                     "The composition surface every output is taken from.", Severity.OK));
         }
         for (VideoPipeline.OutputStats output : video.outputs()) {
+            if (output.broken()) {
+                metrics.add(new Metric(output.name(), "Capture", "Broken",
+                        "GPU capture for this output failed and has been disabled for the session. "
+                                + "Stop and start the recording or stream to try again.",
+                        Severity.CRITICAL));
+                metrics.add(new Metric(output.name(), "GPU readback", "-",
+                        "No further frames are being copied out of GPU memory for this output.",
+                        Severity.CRITICAL));
+                findings.add(new Finding(Severity.CRITICAL, output.name()
+                        + ": GPU capture failed and has been disabled. Stop and restart the recording or stream "
+                        + "to recreate the output; check the log for the OpenGL error."));
+                continue;
+            }
             Severity capture = output.captureFps() < output.targetFps() * 0.9 && output.captureFps() > 0
                     ? Severity.WARNING : Severity.OK;
             metrics.add(new Metric(output.name(), "Capture", String.format(Locale.ROOT, "%s at %s (target %d)",
@@ -70,7 +83,14 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                     "Frames taken from the program canvas for this output (" + output.mode().displayName() + ").",
                     capture));
             metrics.add(new Metric(output.name(), "GPU readback", millis(output.readbackMillis()),
-                    "Time copying each finished frame out of GPU memory.", output.readbackMillis() > 4 ? Severity.WARNING : Severity.OK));
+                    "Time copying each finished frame out of GPU memory.",
+                    output.readbackMillis() > 4 ? Severity.WARNING : Severity.OK));
+            metrics.add(new Metric(output.name(), "Readback skips", Long.toString(output.readbackSkipped()),
+                    "Captures skipped because three GPU readbacks were still in flight (3-PBO ring full).",
+                    output.readbackSkipped() > 0 ? Severity.WARNING : Severity.OK));
+            metrics.add(new Metric(output.name(), "Buffers exhausted", Long.toString(output.bufferExhausted()),
+                    "Pictures lost because every CPU frame buffer was still waiting for the encoder.",
+                    output.bufferExhausted() > 0 ? Severity.WARNING : Severity.OK));
             metrics.add(new Metric(output.name(), "Frames repeated (render lag)", Long.toString(output.renderRepeats()),
                     "Frames repeated because the game rendered slower than the output rate.",
                     output.renderRepeats() > output.targetFps() * 5L ? Severity.WARNING : Severity.OK));

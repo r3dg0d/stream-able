@@ -1,7 +1,10 @@
 package dev.streamable.diagnostics;
 
+import dev.streamable.pipeline.VideoPipeline;
 import dev.streamable.streaming.DestinationState;
 import dev.streamable.streaming.StreamHealth;
+import dev.streamable.video.Resolution;
+import dev.streamable.video.ScalingMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -26,6 +29,17 @@ class HealthReportTest {
     private static HealthReport report(StreamHealth stream, long freeDisk, boolean recording) {
         return HealthReport.build(new HealthReport.Inputs(null, stream, recording, 600_000, 1_500_000_000L,
                 freeDisk, 40_000, null, null, false));
+    }
+
+
+    private static VideoPipeline.OutputStats output(String name, boolean broken, long skipped, long exhausted) {
+        return new VideoPipeline.OutputStats(name, Resolution.FULL_HD, ScalingMode.FIT, 60,
+                broken ? 0 : 60, broken ? -1 : 1.2, 0, 0, skipped, exhausted, 0, broken);
+    }
+
+    private static HealthReport reportWithVideo(VideoPipeline.Stats video, StreamHealth stream, boolean recording) {
+        return HealthReport.build(new HealthReport.Inputs(video, stream, recording, 600_000, 1_500_000_000L,
+                -1, 40_000, null, null, false));
     }
 
     @Test
@@ -108,4 +122,42 @@ class HealthReportTest {
         assertFalse(report.findings().stream().anyMatch(f ->
                 f.message().equals("Connecting to destinations...")));
     }
+
+    @Test
+    void brokenOutputIsCriticalAndNotSmooth() {
+        VideoPipeline.Stats video = new VideoPipeline.Stats(Resolution.FULL_HD, 60, 0.5,
+                output("Recording", true, 0, 0), null, null, false);
+        HealthReport report = reportWithVideo(video, live(6150, 60, 1.0, 0.05, 0), true);
+        assertTrue(report.findings().stream().anyMatch(f ->
+                f.severity() == HealthReport.Severity.CRITICAL
+                        && f.message().startsWith("Recording: GPU capture failed")));
+        assertFalse(report.findings().stream().anyMatch(f ->
+                f.message().equals("Everything is running smoothly.")));
+        assertTrue(report.metrics().stream().anyMatch(m ->
+                m.group().equals("Recording") && m.name().equals("Capture")
+                        && m.value().equals("Broken")
+                        && m.severity() == HealthReport.Severity.CRITICAL));
+        assertEquals(HealthReport.Severity.CRITICAL, report.worst());
+    }
+
+    @Test
+    void readbackPressureAddsMetricsAndFinding() {
+        VideoPipeline.Stats video = new VideoPipeline.Stats(Resolution.FULL_HD, 60, 0.5,
+                null, output("Streaming", false, 4, 2), null, false);
+        HealthReport report = reportWithVideo(video, live(6150, 60, 1.0, 0.05, 0), false);
+        assertTrue(report.metrics().stream().anyMatch(m ->
+                m.group().equals("Streaming") && m.name().equals("Readback skips")
+                        && m.value().equals("4")
+                        && m.severity() == HealthReport.Severity.WARNING));
+        assertTrue(report.metrics().stream().anyMatch(m ->
+                m.group().equals("Streaming") && m.name().equals("Buffers exhausted")
+                        && m.value().equals("2")));
+        assertTrue(report.findings().stream().anyMatch(f ->
+                f.severity() == HealthReport.Severity.WARNING
+                        && f.message().contains("captures delayed")
+                        && f.message().contains("6")));
+        assertFalse(report.findings().stream().anyMatch(f ->
+                f.message().equals("Everything is running smoothly.")));
+    }
+
 }

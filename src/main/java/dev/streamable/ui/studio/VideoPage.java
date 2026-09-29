@@ -3,6 +3,7 @@ package dev.streamable.ui.studio;
 import dev.streamable.StreamAbleClient;
 import dev.streamable.config.VideoSettings;
 import dev.streamable.ffmpeg.VideoEncoder;
+import dev.streamable.pipeline.VideoPipeline;
 import dev.streamable.ui.kit.Button;
 import dev.streamable.ui.kit.Dropdown;
 import dev.streamable.ui.kit.Label;
@@ -18,6 +19,7 @@ import dev.streamable.video.ScalingMode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
 
@@ -53,7 +55,93 @@ final class VideoPage {
                 OutputValidation.Target.RECORDING);
         outputCard(s, page.add(new Widgets.Card(Theme.SPACE_5)), "Streaming output", client.config().video.streaming,
                 OutputValidation.Target.STREAMING);
+        captureHealthCard(s, page.add(new Widgets.Card(Theme.SPACE_5)));
         watermarkCard(s, page.add(new Widgets.Card(Theme.SPACE_5)));
+    }
+
+    /**
+     * Live GPU readback / PBO-ring health for every active output. Numbers come
+     * from {@link VideoPipeline#stats()}; idle (no recording/stream/replay) shows
+     * a quiet caption instead of inventing zeros.
+     */
+    private static void captureHealthCard(Studio s, Widgets.Card card) {
+        StreamAbleClient client = s.client();
+        card.add(new Widgets.SectionHeader("Capture health",
+                () -> "GPU readback for each live output (3-PBO ring). Also on Stream Health."));
+        card.add(new Widgets.Notice(() -> {
+            for (VideoPipeline.OutputStats o : client.video().stats().outputs()) {
+                if (o.broken()) {
+                    return o.name() + ": GPU capture failed and has been disabled. Stop and restart the "
+                            + "recording or stream to recreate it; see the log for the OpenGL error.";
+                }
+            }
+            return null;
+        }, () -> Theme.DANGER));
+        card.add(new Label(() -> {
+            List<VideoPipeline.OutputStats> outputs = client.video().stats().outputs();
+            if (outputs.isEmpty()) {
+                return "No active outputs yet. Start a recording, stream or replay buffer to see readback times.";
+            }
+            return null;
+        }).color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION).wrap()
+                .visibleWhen(() -> client.video().stats().outputs().isEmpty()));
+
+        Layouts.Grid grid = card.add(new Layouts.Grid(120, Theme.SPACE_4));
+        for (String name : List.of("Recording", "Streaming", "Replay")) {
+            grid.add(new Widgets.MetricCard(name,
+                    () -> captureValue(client, name),
+                    () -> captureColor(client, name),
+                    () -> captureNote(client, name)));
+        }
+    }
+
+    private static VideoPipeline.OutputStats findOutput(StreamAbleClient client, String name) {
+        for (VideoPipeline.OutputStats o : client.video().stats().outputs()) {
+            if (name.equals(o.name())) {
+                return o;
+            }
+        }
+        return null;
+    }
+
+    private static String captureValue(StreamAbleClient client, String name) {
+        VideoPipeline.OutputStats o = findOutput(client, name);
+        if (o == null) {
+            return "Idle";
+        }
+        if (o.broken()) {
+            return "Broken";
+        }
+        if (o.readbackMillis() < 0) {
+            return "Starting";
+        }
+        return String.format(Locale.ROOT, "%.2f ms", o.readbackMillis());
+    }
+
+    private static int captureColor(StreamAbleClient client, String name) {
+        VideoPipeline.OutputStats o = findOutput(client, name);
+        if (o == null) {
+            return Theme.TEXT_MUTED;
+        }
+        if (o.broken()) {
+            return Theme.DANGER;
+        }
+        if (o.readbackSkipped() > 0 || o.bufferExhausted() > 0 || o.readbackMillis() > 4) {
+            return Theme.WARNING;
+        }
+        return Theme.SUCCESS;
+    }
+
+    private static String captureNote(StreamAbleClient client, String name) {
+        VideoPipeline.OutputStats o = findOutput(client, name);
+        if (o == null) {
+            return "not capturing";
+        }
+        if (o.broken()) {
+            return "disabled after GL error";
+        }
+        return String.format(Locale.ROOT, "%.0f/%d FPS · %d skip · %d buf",
+                Math.max(0, o.captureFps()), o.targetFps(), o.readbackSkipped(), o.bufferExhausted());
     }
 
     private static void watermarkCard(Studio s, Widgets.Card card) {
