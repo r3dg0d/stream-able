@@ -4,6 +4,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.3.1 - 2026-09-29
+
+Recording, capture, browser, and mic health (cycles 12–15) on Minecraft 26.2.
+
 ### Added
 - **Capture health in Studio**: Studio → Video shows live GPU readback time,
   capture FPS, PBO-ring skips and buffer-exhaust counts for Recording /
