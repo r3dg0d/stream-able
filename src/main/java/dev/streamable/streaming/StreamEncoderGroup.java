@@ -7,7 +7,10 @@ import dev.streamable.ffmpeg.FFmpegCommandBuilder;
 import dev.streamable.ffmpeg.FFmpegProcess;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * One encoder and the destinations it feeds.
@@ -17,15 +20,14 @@ import java.util.List;
  * three services cost one encode. Each tee slave carries {@code onfail=ignore},
  * which is what lets a dead ingest fail on its own without killing the others.</p>
  *
- * <h2>Failure granularity, honestly stated</h2>
- * <p>With {@code tee}, FFmpeg reports slave failures in its stderr but does not
- * expose a clean per-slave status API. Stream-able therefore tracks
- * per-destination state at two levels: a destination in its own group has fully
- * independent state, while destinations sharing a tee are marked live together
- * and are individually flagged when their URL appears in an error line. If the
- * whole process dies, the group reconnects as a unit. This is a deliberate
- * trade: one encode for N destinations, at the cost of coarser per-slave
- * reporting inside a group.</p>
+ * <h2>Failure granularity</h2>
+ * <p>With {@code tee}, FFmpeg reports slave failures on stderr but has no clean
+ * per-slave status API. Stream-able attributes those lines with
+ * {@link TeeSlaveAttributor}: a destination whose URL appears in an error is
+ * marked {@link DestinationState#ERROR} while healthy siblings stay
+ * {@link DestinationState#LIVE}. If the whole process dies, the group reconnects
+ * as a unit. Mid-stream slave drops therefore surface per row in Stream Health;
+ * a full process death is still a shared reconnect.</p>
  */
 public final class StreamEncoderGroup implements AutoCloseable {
 
@@ -55,6 +57,11 @@ public final class StreamEncoderGroup implements AutoCloseable {
     private boolean everPublished;
     private volatile long nextRetryAtMillis;
     private volatile boolean stopped;
+    /**
+     * Destinations flagged by a mid-stream tee slave error while the process
+     * kept running. {@link #tick()} must not promote these back to LIVE.
+     */
+    private final Set<UUID> teeFailedIds = new HashSet<>();
 
     public StreamEncoderGroup(DestinationGrouping.Group group, String ffmpegExecutable,
                               int queueCapacity, ReconnectPolicy reconnectPolicy,
@@ -116,6 +123,8 @@ public final class StreamEncoderGroup implements AutoCloseable {
 
             process = new FFmpegProcess(command, queueCapacity, secrets);
             process.setOnUnexpectedExit(this::onProcessDied);
+            process.setOnErrorLine(this::onErrorLine);
+            teeFailedIds.clear();
             process.start();
             // Deliberately still CONNECTING: a spawned process proves nothing.
             // FFmpeg can start, fail the RTMP handshake and exit a second later,
@@ -148,18 +157,21 @@ public final class StreamEncoderGroup implements AutoCloseable {
         if (stopped || current == null || !current.isPublishing()) {
             return;
         }
-        if (!everPublished || currentState() != DestinationState.LIVE) {
+        boolean anyPromoted = false;
+        for (StreamDestination destination : group.destinations()) {
+            if (teeFailedIds.contains(destination.id())) {
+                continue;
+            }
+            if (destination.state() != DestinationState.LIVE) {
+                destination.setState(DestinationState.LIVE);
+                anyPromoted = true;
+            }
+        }
+        if (!everPublished || anyPromoted) {
             everPublished = true;
             attempts = 0;
-            setState(DestinationState.LIVE, "");
             StreamAbleLog.STREAMING.info("Stream is live to {}", group.redactedPublishUrls());
         }
-    }
-
-    private DestinationState currentState() {
-        return group.destinations().isEmpty()
-                ? DestinationState.OFFLINE
-                : group.destinations().getFirst().state();
     }
 
     private void onProcessDied() {
@@ -222,20 +234,36 @@ public final class StreamEncoderGroup implements AutoCloseable {
     }
 
     /**
-     * Flags the specific destinations named in an error line.
-     *
-     * <p>With a tee fan-out FFmpeg mentions the failing slave URL, so a message
-     * can usually be attributed to one destination even though the process is
-     * shared.</p>
+     * Live stderr hook: a tee slave can fail while {@code onfail=ignore} keeps
+     * the encoder running. Attribute the line and leave healthy siblings live.
      */
-    private void attributeErrorToDestinations(String errorLine) {
-        if (errorLine == null || errorLine.isBlank()) {
+    private void onErrorLine(String errorLine) {
+        if (stopped) {
+            return;
+        }
+        int flagged = TeeSlaveAttributor.flagFailedSlaves(errorLine, group.destinations());
+        if (flagged <= 0) {
             return;
         }
         for (StreamDestination destination : group.destinations()) {
-            String ingest = destination.credentials().ingestUrl();
-            if (!ingest.isEmpty() && errorLine.contains(ingest)) {
-                destination.setLastError(errorLine);
+            if (destination.state() == DestinationState.ERROR) {
+                teeFailedIds.add(destination.id());
+            }
+        }
+        StreamAbleLog.STREAMING.warn(
+                "Attributed ingest error to {} destination(s) without stopping the shared encoder",
+                flagged);
+    }
+
+    /**
+     * On process death, attach the error detail to any destination named in it
+     * (state is then overwritten by the reconnect / error transition).
+     */
+    private void attributeErrorToDestinations(String errorLine) {
+        TeeSlaveAttributor.flagFailedSlaves(errorLine, group.destinations());
+        for (StreamDestination destination : group.destinations()) {
+            if (destination.state() == DestinationState.ERROR) {
+                teeFailedIds.add(destination.id());
             }
         }
     }
@@ -269,6 +297,7 @@ public final class StreamEncoderGroup implements AutoCloseable {
         stopped = false;
         attempts = 0;
         nextRetryAtMillis = 0;
+        teeFailedIds.clear();
         return start(withAudio);
     }
 

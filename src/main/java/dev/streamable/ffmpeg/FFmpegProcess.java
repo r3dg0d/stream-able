@@ -17,6 +17,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /**
  * A running FFmpeg process fed raw frames through a bounded queue.
@@ -72,6 +73,8 @@ public final class FFmpegProcess implements AutoCloseable {
     private volatile boolean hasDiagnostic;
     private volatile int exitCode = Integer.MIN_VALUE;
     private volatile Runnable onUnexpectedExit;
+    /** Invoked on the stderr thread for each redacted line that looks like an error. */
+    private volatile Consumer<String> onErrorLine;
     private volatile FFmpegProgress progress = FFmpegProgress.NONE;
     private volatile double encodeLatencyMillis = -1;
     private volatile double outputKbps = -1;
@@ -93,6 +96,15 @@ public final class FFmpegProcess implements AutoCloseable {
     /** Called when FFmpeg exits without {@link #stop()} having been requested. */
     public void setOnUnexpectedExit(Runnable callback) {
         this.onUnexpectedExit = callback;
+    }
+
+    /**
+     * Called for each redacted stderr line that looks like an error, including
+     * while the process is still running (e.g. a {@code tee} slave with
+     * {@code onfail=ignore}).
+     */
+    public void setOnErrorLine(Consumer<String> callback) {
+        this.onErrorLine = callback;
     }
 
     /** The command with credentials masked - the only form safe to log or display. */
@@ -290,6 +302,14 @@ public final class FFmpegProcess implements AutoCloseable {
                     lastError = safe;
                     hasDiagnostic = true;
                     StreamAbleLog.FFMPEG.warn("{}", safe);
+                    Consumer<String> errorCallback = onErrorLine;
+                    if (errorCallback != null) {
+                        try {
+                            errorCallback.accept(safe);
+                        } catch (RuntimeException e) {
+                            StreamAbleLog.FFMPEG.error("Error in FFmpeg stderr handler", e);
+                        }
+                    }
                 }
             }
         } catch (IOException e) {

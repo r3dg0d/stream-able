@@ -4,6 +4,13 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Improved
+- **Per-destination tee reporting**: when FFmpeg's `tee` muxer logs a slave
+  failure while `onfail=ignore` keeps the encoder alive, Stream-able attributes
+  the stderr line to the named destination and marks only that row
+  `ERROR` (Stream Health / Studio). Healthy siblings stay `LIVE`. Mid-stream
+  slave drops no longer look identical across the whole group.
+
 ### Fixed
 - **FFmpeg install hints** no longer point at retired gyan.dev / johnvansickle /
   evermeet hosts; desktop platforms direct users to Studio → Components (managed

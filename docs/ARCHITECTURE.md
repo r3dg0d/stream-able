@@ -59,6 +59,12 @@ started with `ProcessBuilder`: no shell, and stream keys only ever appear inside
 the list itself. The encode head converts RGBA to BT.709 limited range, stamps the
 frames BT.709 (`setparams`), pins SAR 1:1 and tags the output.
 
+Compatible destinations share one FFmpeg process via the `tee` muxer
+(`onfail=ignore` per slave). `streaming/TeeSlaveAttributor` maps redacted stderr
+error lines onto named destinations so a mid-stream slave drop marks only that
+row `ERROR` while siblings stay `LIVE`; a full process death still reconnects the
+group as a unit (`StreamEncoderGroup` + `ReconnectPolicy`).
+
 ## Audio path
 
 ```
