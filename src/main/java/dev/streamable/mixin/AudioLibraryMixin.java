@@ -37,7 +37,7 @@ import java.nio.IntBuffer;
  *       recording rather than a client with no sound.</li>
  * </ul>
  *
- * <p>Targets for Minecraft 26.1.2, where {@code openDeviceOrFallback} lives on
+ * <p>Targets for Minecraft 26.2, where {@code openDeviceOrFallback} lives on
  * {@link Library} itself and takes a preferred plus a fallback device name -
  * both changed from the 1.21.x signature this was originally written against.</p>
  */

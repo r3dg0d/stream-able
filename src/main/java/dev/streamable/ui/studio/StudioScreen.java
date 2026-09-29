@@ -1,5 +1,7 @@
 package dev.streamable.ui.studio;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.StreamAbleClient;
 import dev.streamable.audio.mic.MicrophoneService;
 import dev.streamable.ui.SourceEditorScreen;
@@ -135,7 +137,7 @@ public final class StudioScreen extends UiScreen {
         client.microphone().monitor().stop();
         client.config().microphone.monitoring = false;
         client.saveNow();
-        minecraft.setScreen(parent);
+        ClientGui.setScreen(parent);
     }
 
     @Override
@@ -184,7 +186,7 @@ public final class StudioScreen extends UiScreen {
             }
             add(new NavButton(Icons.Icon.GRID, "Canvas editor",
                     "Arrange sources directly over the game (F7).",
-                    () -> minecraft.setScreen(new SourceEditorScreen(client))));
+                    () -> ClientGui.setScreen(new SourceEditorScreen(client))));
             add(new NavButton(Icons.Icon.CLOSE, "Close", "Close the Studio (Esc).", StudioScreen.this::onClose));
         }
 

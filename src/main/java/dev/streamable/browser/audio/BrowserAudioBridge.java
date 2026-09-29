@@ -10,7 +10,7 @@ import dev.streamable.source.BrowserSource;
  * <h2>Why not the native route</h2>
  * <p>CEF has {@code CefAudioHandler} ({@code OnAudioStreamPacket}), the clean
  * per-browser PCM callback, but the JCEF build that MCEF Modern
- * {@code 0.3.3+mc26.1.jcef146.0.10} bundles ({@code me.friwi:jcef-api} at
+ * {@code 0.3.3+mc26.2.jcef146.0.10} bundles ({@code me.friwi:jcef-api} at
  * {@code cef-146.0.10}) contains no audio handler of any kind, so there is no
  * native API to attach to.</p>
  *

@@ -1,5 +1,7 @@
 package dev.streamable;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.audio.AudioMixer;
 import dev.streamable.audio.GameAudioTap;
 import dev.streamable.browser.BrowserSourceManager;
@@ -479,8 +481,8 @@ public final class StreamAbleClient {
             return;
         }
         adoptGameResolutionOnFirstRun();
-        boolean editing = client.screen instanceof dev.streamable.ui.SourceEditorScreen;
-        boolean ownScreen = client.screen instanceof dev.streamable.ui.StreamAbleScreen;
+        boolean editing = ClientGui.screen() instanceof dev.streamable.ui.SourceEditorScreen;
+        boolean ownScreen = ClientGui.screen() instanceof dev.streamable.ui.StreamAbleScreen;
         List<BrowserSource> visible = sources.snapshot();
         if (!video.isActive() && visible.isEmpty() && !editing && !video.previewRequested(System.nanoTime())) {
             return;   // nothing to do: stay entirely out of the render path
@@ -529,7 +531,7 @@ public final class StreamAbleClient {
     }
 
     private void renderLocalOverlay(Minecraft client, boolean editing) {
-        if (client.screen != null && !editing) {
+        if (ClientGui.screen() != null && !editing) {
             // Sources belong over gameplay (and in the canvas editor), never
             // over a menu or the Studio.
             return;

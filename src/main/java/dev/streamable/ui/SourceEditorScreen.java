@@ -1,5 +1,7 @@
 package dev.streamable.ui;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.StreamAbleClient;
 import dev.streamable.browser.BrowserHandle;
 import dev.streamable.browser.input.BrowserKeyboardCompat;
@@ -41,7 +43,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
     public SourceEditorScreen(StreamAbleClient runtime) {
         super(Component.translatable("screen.streamable.source_editor"));
         this.runtime = runtime;
-        runtime.freezeGameForStudio(net.minecraft.client.Minecraft.getInstance().screen);
+        runtime.freezeGameForStudio(ClientGui.screen());
     }
 
     @Override
@@ -51,7 +53,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
                 .bounds(8, 8, 130, 20).build());
         addRenderableWidget(net.minecraft.client.gui.components.Button
                 .builder(Component.translatable("streamable.editor.open_studio"),
-                        b -> minecraft.setScreen(new dev.streamable.ui.studio.StudioScreen(runtime, this)))
+                        b -> ClientGui.setScreen(new dev.streamable.ui.studio.StudioScreen(runtime, this)))
                 .bounds(146, 8, 110, 20).build());
     }
 

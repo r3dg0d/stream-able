@@ -1,5 +1,7 @@
 package dev.streamable;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.ui.SourceEditorScreen;
 import dev.streamable.ui.studio.StudioScreen;
 import net.fabricmc.api.ClientModInitializer;
@@ -164,13 +166,13 @@ public final class StreamAble implements ClientModInitializer {
             }
         }
         while (openStudioKey.consumeClick()) {
-            client.setScreen(new StudioScreen(runtime, client.screen));
+            ClientGui.setScreen(new StudioScreen(runtime, ClientGui.screen()));
         }
         while (toggleSourceEditorKey.consumeClick()) {
-            if (client.screen instanceof SourceEditorScreen) {
-                client.setScreen(null);
+            if (ClientGui.screen() instanceof SourceEditorScreen) {
+                ClientGui.setScreen(null);
             } else {
-                client.setScreen(new SourceEditorScreen(runtime));
+                ClientGui.setScreen(new SourceEditorScreen(runtime));
             }
         }
         while (toggleHudKey.consumeClick()) {

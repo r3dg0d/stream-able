@@ -1,5 +1,7 @@
 package dev.streamable.ui.studio;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.StreamAbleClient;
 import dev.streamable.browser.BrowserEngineStatus;
 import dev.streamable.browser.BrowserTestPage;
@@ -61,7 +63,7 @@ final class SourcesPage {
             client.editor().select(created.id());
             s.screen().refresh();
         }).variant(Button.Variant.PRIMARY).icon(Icons.Icon.PLUS), 132);
-        actions.add(Button.of("Canvas editor", () -> net.minecraft.client.Minecraft.getInstance().setScreen(new SourceEditorScreen(client)))
+        actions.add(Button.of("Canvas editor", () -> ClientGui.setScreen(new SourceEditorScreen(client)))
                 .icon(Icons.Icon.GRID).tooltip("Drag, resize and rotate sources over the game (F7)."), 104);
         actions.add(Button.of("Add test page", () -> {
             String url = BrowserTestPage.extractAndGetUrl(FabricLoader.getInstance().getConfigDir());

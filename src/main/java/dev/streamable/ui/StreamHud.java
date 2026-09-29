@@ -1,5 +1,7 @@
 package dev.streamable.ui;
 
+import dev.streamable.util.ClientGui;
+
 import dev.streamable.StreamAbleClient;
 import dev.streamable.audio.dsp.LevelMeter;
 import dev.streamable.config.InterfaceSettings;
@@ -15,7 +17,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 
 import java.util.ArrayList;
@@ -72,8 +73,8 @@ public final class StreamHud {
     public static void renderAfterCapture(GameRenderer gameRenderer) {
         Minecraft mc = Minecraft.getInstance();
         StreamAbleClient client = StreamAbleClient.get();
-        boolean editing = mc.screen instanceof SourceEditorScreen;
-        if (client == null || mc.player == null || mc.options.hideGui || (mc.screen != null && !editing)) {
+        boolean editing = ClientGui.screen() instanceof SourceEditorScreen;
+        if (client == null || mc.player == null || ClientGui.hudHidden() || (ClientGui.screen() != null && !editing)) {
             lastBounds = new int[4];
             return;
         }
@@ -85,7 +86,7 @@ public final class StreamHud {
             lastBounds = new int[4];
             return;
         }
-        GuiRenderState state = gameRenderer.getGameRenderState().guiRenderState;
+        GuiRenderState state = gameRenderer.gameRenderState().guiRenderState;
         state.reset();   // the frame's own GUI has already been drawn
         Window window = mc.getWindow();
         GuiGraphicsExtractor graphics = new GuiGraphicsExtractor(mc, state,
@@ -96,7 +97,7 @@ public final class StreamHud {
         access.streamable$setUseUiLightmap(true);
         try {
             GuiRenderer renderer = access.streamable$guiRenderer();
-            renderer.render(access.streamable$fogRenderer().getBuffer(FogRenderer.FogMode.NONE));
+            renderer.render();
             renderer.endFrame();
         } finally {
             access.streamable$setUseUiLightmap(false);

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class NativeLibraryDiagnosticTest {
 
     private static final String REAL_MESSAGE =
-            "/home/user/.local/share/PrismLauncher/instances/Kitchen Sink 26.1.2"
+            "/home/user/.local/share/PrismLauncher/instances/Kitchen Sink 26.2"
                     + "/minecraft/config/mcef-modern/jcef/libjcef.so: cannot open shared object file:"
                     + " No such file or directory";
 
@@ -20,7 +20,7 @@ class NativeLibraryDiagnosticTest {
         Path parsed = NativeLibraryDiagnostic.extractLibraryPath(REAL_MESSAGE);
         assertNotNull(parsed);
         assertEquals("libjcef.so", parsed.getFileName().toString());
-        assertTrue(parsed.toString().contains("Kitchen Sink 26.1.2"));
+        assertTrue(parsed.toString().contains("Kitchen Sink 26.2"));
     }
 
     @Test

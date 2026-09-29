@@ -128,7 +128,7 @@ public final class ProgramCompositor implements AutoCloseable {
 
     /** The main render target's colour texture and size, or {@code null}. */
     private static GameTexture gameTexture() {
-        RenderTarget target = Minecraft.getInstance().getMainRenderTarget();
+        RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
         if (target == null) {
             return null;
         }

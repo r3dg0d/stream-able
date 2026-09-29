@@ -5,7 +5,7 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.GpuFormat;
 import dev.streamable.StreamAbleLog;
 import dev.streamable.video.Resolution;
 import org.lwjgl.opengl.GL11;
@@ -49,7 +49,7 @@ final class ProgramTarget implements AutoCloseable {
                 GpuDevice device = RenderSystem.getDevice();
                 gpuTexture = device.createTexture(label,
                         GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_SRC,
-                        TextureFormat.RGBA8, size.width(), size.height(), 1, 1);
+                        GpuFormat.RGBA8_UNORM, size.width(), size.height(), 1, 1);
                 if (gpuTexture instanceof GlTexture gl) {
                     textureId = gl.glId();
                     view = device.createTextureView(gpuTexture);
