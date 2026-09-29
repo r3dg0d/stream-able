@@ -38,8 +38,9 @@ import java.util.Locale;
  * after capture, on the player's screen only. It is movable - drag it in the
  * canvas editor, where it is always shown so it can be placed - and its
  * position is saved as a fraction of the screen, so it stays put across window
- * sizes, including ultrawide. By default it sits top-left, clear of the game's
- * toasts.</p>
+ * sizes, including ultrawide. When not dragged, {@code streamHudPosition}
+ * picks a corner (default top-right), with top corners clear of the game's
+ * toasts. Detailed mode adds a replay seconds row under the fill pill.</p>
  */
 public final class StreamHud {
 
@@ -123,14 +124,14 @@ public final class StreamHud {
         w += PAD * 2;
         int sw = Math.round(w * scale);
         int sh = Math.round(h * scale);
-        int freeW = Math.max(0, graphics.guiWidth() - sw - 2 * MARGIN);
-        int freeH = Math.max(0, graphics.guiHeight() - sh - 2 * MARGIN);
-        float fx = ui.streamHudX < 0 ? 0f : ui.streamHudX;
-        float fy = Math.max(0f, ui.streamHudY);
-        int x = MARGIN + Math.round(freeW * fx);
-        // Unplaced, it sits just below the canvas editor's button row, so it
-        // never covers those buttons when the editor is open.
-        int y = ui.streamHudY < 0 ? Math.min(DEFAULT_Y, MARGIN + freeH) : MARGIN + Math.round(freeH * fy);
+        // Free-drag fractions win when set; otherwise streamHudPosition picks a
+        // corner. Top corners use DEFAULT_Y so the panel sits below the canvas
+        // editor chrome / toasts.
+        StreamHudPlacement.Point at = StreamHudPlacement.resolve(
+                ui.streamHudPosition, ui.streamHudX, ui.streamHudY,
+                sw, sh, graphics.guiWidth(), graphics.guiHeight(), MARGIN, DEFAULT_Y);
+        int x = at.x();
+        int y = at.y();
         lastBounds = new int[]{x, y, sw, sh};
 
         graphics.pose().pushMatrix();
@@ -293,6 +294,13 @@ public final class StreamHud {
             for (StreamHealth.DestinationStatus d : health.destinations()) {
                 rows.add(new Text("● " + d.name() + "  " + d.state().displayName(), d.state().colour() | 0xFF000000, 0.7f));
             }
+        }
+        if (replayBadge.present()) {
+            var buffer = client.replayBuffer();
+            String detail = ReplayHudBadge.detailLine(
+                    buffer.bufferedSeconds(), buffer.configuredSeconds(), buffer.isSaving());
+            rows.add(new Text(detail, replayBadge.level() == ReplayHudBadge.Level.SAVING
+                    ? Theme.WARNING : Theme.TEXT_SECONDARY, 0.8f));
         }
         if (client.config().recording.captureMicrophone) {
             LevelMeter.Reading reading = client.microphone().isCapturing()

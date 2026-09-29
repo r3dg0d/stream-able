@@ -1,5 +1,7 @@
 package dev.streamable.ui;
 
+import java.util.Locale;
+
 /**
  * Compact Stream HUD badge for the replay buffer fill level.
  *
@@ -71,5 +73,21 @@ public final class ReplayHudBadge {
             return new Badge("REPLAY 100%", Level.FULL, 100);
         }
         return new Badge("REPLAY " + percent + "%", Level.FILLING, percent);
+    }
+
+    /**
+     * Detailed HUD line under the replay pill: buffered vs configured seconds.
+     *
+     * @param bufferedSeconds   seconds currently available to save
+     * @param configuredSeconds configured buffer length
+     * @param saving            a clip encode/mux is in flight
+     */
+    public static String detailLine(double bufferedSeconds, int configuredSeconds, boolean saving) {
+        if (configuredSeconds <= 0 || !Double.isFinite(bufferedSeconds)) {
+            return saving ? "Replay · saving" : "Replay —";
+        }
+        double shown = Math.clamp(bufferedSeconds, 0.0, configuredSeconds);
+        String base = String.format(Locale.ROOT, "Replay %.0f / %d s", shown, configuredSeconds);
+        return saving ? base + " · saving" : base;
     }
 }

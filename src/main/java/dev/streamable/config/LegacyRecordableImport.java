@@ -73,10 +73,10 @@ public final class LegacyRecordableImport {
             imported += intField(root, "audioSampleRate", v -> recording.audioSampleRate = v);
             imported += intField(root, "audioSyncOffsetMs", v -> recording.audioDelayMs = v);
             imported += intField(root, "maxFileSizeMB", v -> recording.maxFileSizeMb = v);
-            imported += boolField(root, "showOverlay", v -> recording.showRecordingOverlay = v);
             imported += boolField(root, "replayBufferEnabled", v -> recording.replayBufferEnabled = v);
             imported += intField(root, "replayBufferDurationSeconds", v -> recording.replayBufferSeconds = v);
-            imported += intField(root, "overlayScale", v -> recording.overlayScale = v / 100.0f);
+            // showOverlay / overlayScale belonged to Record-able's recording
+            // overlay; Stream HUD replaced it, so those keys are ignored.
             // "audioSource" was game / mic / both in Record-able.
             imported += stringField(root, "audioSource", v -> {
                 String mode = v.toLowerCase(Locale.ROOT);

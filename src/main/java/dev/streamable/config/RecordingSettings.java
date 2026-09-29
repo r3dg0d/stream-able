@@ -102,11 +102,12 @@ public final class RecordingSettings {
     /** Manual A/V nudge in milliseconds, on top of the measured start offset. */
     public int audioDelayMs = 0;
 
-    // Replay buffer and automatic clips: see recording/replay. killMontages,
-    // deferred capture and the recording-overlay fields are carried over from
-    // Record-able so configs and its import round-trip, but are not
-    // implemented and not shown. watermarkEnabled/watermarkText only seed the
-    // new video.watermark once (see StreamAbleConfig.validate).
+    // Replay buffer and automatic clips: see recording/replay. killMontages and
+    // deferred capture are carried over from Record-able so configs round-trip,
+    // but are not implemented and not shown. The old recording-overlay fields
+    // (showOverlay / overlayScale / overlayPosition) were retired — Stream HUD
+    // replaced them. watermarkEnabled/watermarkText only seed the new
+    // video.watermark once (see StreamAbleConfig.validate).
 
     // ---- replay buffer and clips ------------------------------------------
     public boolean replayBufferEnabled = false;
@@ -123,10 +124,7 @@ public final class RecordingSettings {
     public int deferredOutputFps = 60;
     public boolean deferredInterpolation = false;
 
-    // ---- overlay -----------------------------------------------------------
-    public boolean showRecordingOverlay = true;
-    public int overlayPosition = 0;
-    public float overlayScale = 1.0f;
+    // ---- watermark seed (migrated into video.watermark on validate) --------
     public boolean watermarkEnabled = false;
     public String watermarkText = "";
 
@@ -143,11 +141,6 @@ public final class RecordingSettings {
         replayBufferSeconds = Math.clamp(replayBufferSeconds, 5, 600);
         deferredCaptureFps = Math.clamp(deferredCaptureFps, 1, 60);
         deferredOutputFps = Math.clamp(deferredOutputFps, 15, 240);
-        if (!Float.isFinite(overlayScale)) {
-            overlayScale = 1.0f;
-        }
-        overlayScale = (float) Math.clamp(overlayScale, 0.5, 2.0);
-        overlayPosition = Math.clamp(overlayPosition, 0, 4);
         maxFileSizeMb = Math.max(0, maxFileSizeMb);
         diskSpaceBlockPercent = Math.clamp(diskSpaceBlockPercent, 50, 100);
         diskSpaceWarnPercent = Math.clamp(diskSpaceWarnPercent, 1, diskSpaceBlockPercent - 1);

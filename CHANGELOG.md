@@ -5,19 +5,31 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Improved
+- **Stream HUD corner placement**: unused `streamHudPosition` (TL / TR / BL / BR)
+  now places the panel when it has not been free-dragged. Advanced → Stream HUD
+  exposes a corner control; picking a corner or Reset clears free-drag so the
+  enum applies. Default stays top-right. Pure `StreamHudPlacement` helper.
+- **Stream HUD detailed replay seconds**: detailed mode adds a
+  `Replay N / M s` row under the fill pill (with a saving suffix while muxing).
 - **Stream HUD replay fill-%**: the compact `REPLAY` pill shows how full the
   buffer is (`REPLAY 42%` while filling, `REPLAY 100%` when ready, `SAVING`
   while a clip is muxing). Saving a clip flashes `Saving clip…` immediately,
   then the result. Pure `ReplayHudBadge` helper matches Studio's buffered /
   configured seconds.
 - **Config NaN hardening**: hostile `streamHudScale` / `streamHudOpacity` /
-  `snapThreshold` / `overlayScale` values that are NaN reset to defaults
-  before clamping (Math.clamp alone leaves NaN intact).
+  `snapThreshold` values that are NaN reset to defaults before clamping
+  (Math.clamp alone leaves NaN intact).
 - **Stream HUD mic DSP badge**: when the microphone queue is under pressure
   (same thresholds as Stream Health), the compact HUD shows a `MIC DSP`
   warning pill, or `MIC DROP` when blocks were discarded. Detailed mode's
   mic meter caption matches. Audio and Health pages already covered this; the
   HUD now surfaces it without opening Studio.
+
+### Removed
+- **Dead recording-overlay config**: `showRecordingOverlay`, `overlayPosition`
+  and `overlayScale` were never wired (Stream HUD replaced Record-able's
+  recording overlay). Dropped from settings and from Record-able import
+  mapping; stale JSON keys are ignored on load.
 
 ## 1.3.1 - 2026-09-29
 

@@ -95,30 +95,28 @@ class ConfigIoTest {
         config.streaming.width = 1921;
         config.streaming.fps = 9999;
         config.streaming.bitrateKbps = -1;
-        config.recording.overlayScale = 99f;
+        config.ui.streamHudPosition = 99;
         config.ui.snapThreshold = -5;
         config.validate();
 
         assertEquals(0, config.streaming.width % 2, "odd widths break yuv420p");
         assertTrue(config.streaming.fps <= 240);
         assertTrue(config.streaming.bitrateKbps >= 100);
-        assertTrue(config.recording.overlayScale <= 2.0f);
+        assertEquals(3, config.ui.streamHudPosition, "HUD corner clamps to 0–3");
         assertTrue(config.ui.snapThreshold >= 0);
     }
 
     @Test
-    void validationRestoresFiniteHudAndOverlayDefaultsFromNaN() {
+    void validationRestoresFiniteHudDefaultsFromNaN() {
         StreamAbleConfig config = new StreamAbleConfig();
         config.ui.streamHudScale = Float.NaN;
         config.ui.streamHudOpacity = Float.NaN;
         config.ui.snapThreshold = Double.NaN;
-        config.recording.overlayScale = Float.NaN;
         config.validate();
 
         assertEquals(1.0f, config.ui.streamHudScale, 1e-6);
         assertEquals(0.85f, config.ui.streamHudOpacity, 1e-6);
         assertEquals(8.0, config.ui.snapThreshold, 1e-9);
-        assertEquals(1.0f, config.recording.overlayScale, 1e-6);
         assertTrue(Float.isFinite(config.ui.streamHudScale));
         assertTrue(Float.isFinite(config.ui.streamHudOpacity));
         assertTrue(Double.isFinite(config.ui.snapThreshold));

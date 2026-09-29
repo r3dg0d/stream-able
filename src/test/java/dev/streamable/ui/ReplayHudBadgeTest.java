@@ -63,4 +63,19 @@ class ReplayHudBadgeTest {
         assertEquals("SAVING", badge.label());
         assertEquals(75, badge.fillPercent(), "fill percent still reported while saving");
     }
+
+    @Test
+    void detailLineShowsBufferedOverConfigured() {
+        assertEquals("Replay 24 / 60 s", ReplayHudBadge.detailLine(24, 60, false));
+        assertEquals("Replay 60 / 60 s", ReplayHudBadge.detailLine(60, 60, false));
+        assertEquals("Replay 60 / 60 s · saving", ReplayHudBadge.detailLine(90, 60, true),
+                "buffered is clamped to configured; saving suffix appended");
+    }
+
+    @Test
+    void detailLineHandlesHostileInputs() {
+        assertEquals("Replay —", ReplayHudBadge.detailLine(Double.NaN, 60, false));
+        assertEquals("Replay · saving", ReplayHudBadge.detailLine(10, 0, true));
+        assertEquals("Replay 0 / 60 s", ReplayHudBadge.detailLine(-5, 60, false));
+    }
 }

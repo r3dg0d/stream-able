@@ -6,7 +6,11 @@ public final class InterfaceSettings {
     /** Stream health HUD. Distinct from a browser source - this is Stream-able's own. */
     public boolean showStreamHud = true;
     public boolean detailedStreamHud = false;
-    /** 0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right. */
+    /**
+     * Corner when free-drag is unset: 0 = top-left, 1 = top-right,
+     * 2 = bottom-left, 3 = bottom-right. Ignored once the HUD has been dragged
+     * (streamHudX/Y &gt;= 0); Reset position or picking a corner clears the drag.
+     */
     public int streamHudPosition = 1;
     public float streamHudScale = 1.0f;
     public float streamHudOpacity = 0.85f;

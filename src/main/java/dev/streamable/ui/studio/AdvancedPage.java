@@ -10,6 +10,7 @@ import dev.streamable.ui.kit.Icons;
 import dev.streamable.ui.kit.Label;
 import dev.streamable.ui.kit.Layouts;
 import dev.streamable.ui.kit.Painter;
+import dev.streamable.ui.kit.Segmented;
 import dev.streamable.ui.kit.Slider;
 import dev.streamable.ui.kit.Theme;
 import dev.streamable.ui.kit.Toggle;
@@ -59,6 +60,13 @@ final class AdvancedPage {
             ui.detailedStreamHud = v;
             s.changed();
         }));
+        hud.add(new Widgets.Caption("Corner (when not dragged)"));
+        hud.add(new Segmented(List.of("TL", "TR", "BL", "BR"), () -> ui.streamHudPosition, i -> {
+            ui.streamHudPosition = i;
+            ui.streamHudX = -1;
+            ui.streamHudY = -1;
+            s.changed();
+        }));
         hud.add(new Slider("Size", 0.5, 2, 0.05, () -> ui.streamHudScale, v -> {
             ui.streamHudScale = (float) v;
             s.changed();
@@ -71,7 +79,8 @@ final class AdvancedPage {
             ui.streamHudX = -1;
             ui.streamHudY = -1;
             s.changed();
-        }).variant(Button.Variant.GHOST).tooltip("Drag the HUD in the canvas editor (F7) to move it."));
+        }).variant(Button.Variant.GHOST).tooltip(
+                "Clears a free-drag so the corner above applies. Drag the HUD in the canvas editor (F7) to move it."));
 
         Widgets.Card keys = page.add(new Widgets.Card(Theme.SPACE_3));
         keys.add(new Widgets.SectionHeader("Keyboard", () -> "Change keys in Options > Controls > Key Binds > Stream-able"));

@@ -160,7 +160,9 @@ AAC) into `recordings/clips`. `ClipTriggers` turns per-tick observations
 (death edge, a melee target dying within 5 s, an advancement toast, a dimension
 change) into saves 4 s later, with a 10 s cooldown. The Stream HUD shows fill
 percent via `ui/ReplayHudBadge` (`REPLAY N%` / `REPLAY 100%` / `SAVING`) from
-`bufferedSeconds()` vs `configuredSeconds()`, and flashes on save start/result.
+`bufferedSeconds()` vs `configuredSeconds()`, flashes on save start/result, and
+in detailed mode adds a `Replay N / M s` row. Placement uses
+`ui/StreamHudPlacement` (corner enum when undragged; free-drag fractions otherwise).
 
 ### Watermark (`compositor/WatermarkRenderer`)
 The text is rasterised once with Java2D in the bundled Inter font into a
