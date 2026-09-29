@@ -23,7 +23,10 @@ class NativeStackTest {
 
     @Test
     void stackGrowsWithTheCommandLine() {
+        assertTrue(RuntimeManager.commandLineBytes() >= 0);
         assertTrue(RuntimeManager.nativeStackBytes() >= 64L << 20);
+        // Floor still applies when no cmdline length is available.
+        assertTrue(RuntimeManager.nativeStackBytes() >= RuntimeManager.commandLineBytes());
     }
 
     @Test

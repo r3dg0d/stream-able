@@ -107,16 +107,32 @@ public final class RuntimeManager implements AutoCloseable {
      * SIGSEGV instead of an exception. The stack is sized from the actual
      * command line with a wide margin; it is only reserved address space
      * until used.</p>
+     *
+     * <p>Length comes from {@code /proc/self/cmdline} on Linux, then
+     * {@link ProcessHandle.Info#commandLine()} (covers Windows launchers
+     * that expose it). When neither is available the 64 MB floor still
+     * applies.</p>
      */
     public static long nativeStackBytes() {
-        long commandLine = 0;
-        try {
-            commandLine = Files.readAllBytes(Path.of("/proc/self/cmdline")).length;
-        } catch (IOException | RuntimeException e) {
-            // Not Linux: no such file, and no known deep recursion either.
-        }
+        long commandLine = commandLineBytes();
         long wanted = commandLine * 1024 + (16L << 20);
         return Math.clamp(wanted, 64L << 20, 1L << 30);
+    }
+
+    /** Visible for tests: best-effort length of this JVM's command line. */
+    static long commandLineBytes() {
+        try {
+            return Files.readAllBytes(Path.of("/proc/self/cmdline")).length;
+        } catch (IOException | RuntimeException ignored) {
+            // Not Linux, or /proc unavailable.
+        }
+        try {
+            return ProcessHandle.current().info().commandLine()
+                    .map(line -> (long) line.length())
+                    .orElse(0L);
+        } catch (RuntimeException ignored) {
+            return 0L;
+        }
     }
 
     @Override
