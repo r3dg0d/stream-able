@@ -123,6 +123,60 @@ class HealthReportTest {
                 f.message().equals("Connecting to destinations...")));
     }
 
+
+    private static HealthReport reportWithMic(dev.streamable.audio.mic.MicrophoneProcessor.Stats mic,
+                                              boolean capturing) {
+        return HealthReport.build(new HealthReport.Inputs(null, live(6150, 60, 1.0, 0.05, 0), false,
+                60_000, 0, -1, 40_000, mic, null, capturing));
+    }
+
+    @Test
+    void micOverloadFindingIsActionable() {
+        var mic = new dev.streamable.audio.mic.MicrophoneProcessor.Stats(
+                7.5, 9.0, 40.0, 8, 12, 3, 0, 500, true);
+        HealthReport report = reportWithMic(mic, true);
+        assertTrue(report.metrics().stream().anyMatch(m ->
+                m.group().equals("Microphone") && m.name().equals("Queue backlog")
+                        && m.value().equals("8 blocks")
+                        && m.severity() == HealthReport.Severity.WARNING));
+        assertTrue(report.findings().stream().anyMatch(f ->
+                f.severity() == HealthReport.Severity.CRITICAL
+                        && f.message().startsWith("Microphone DSP is overloaded")
+                        && f.message().contains("8 blocks backlog")
+                        && f.message().contains("3 overruns")
+                        && f.message().contains("12 blocks dropped")
+                        && f.message().contains("Studio → Audio")
+                        && f.message().contains("lighter noise model")));
+        assertFalse(report.findings().stream().anyMatch(f ->
+                f.message().equals("Everything is running smoothly.")));
+        assertFalse(report.findings().stream().anyMatch(f ->
+                f.message().equals("Microphone processing is falling behind.")));
+    }
+
+    @Test
+    void micBacklogWithoutDropsIsWarningAndHealthyMicIsQuiet() {
+        var pressured = new dev.streamable.audio.mic.MicrophoneProcessor.Stats(
+                4.0, 5.0, 40.0, 5, 0, 1, 0, 200, false);
+        HealthReport pressuredReport = reportWithMic(pressured, true);
+        assertTrue(pressuredReport.findings().stream().anyMatch(f ->
+                f.severity() == HealthReport.Severity.WARNING
+                        && f.message().startsWith("Microphone DSP is overloaded")
+                        && f.message().contains("5 blocks backlog")
+                        && !f.message().contains("dropped")));
+
+        var healthy = new dev.streamable.audio.mic.MicrophoneProcessor.Stats(
+                2.0, 3.0, 40.0, 0, 0, 0, 0, 1000, false);
+        HealthReport healthyReport = reportWithMic(healthy, true);
+        assertTrue(healthyReport.metrics().stream().anyMatch(m ->
+                m.group().equals("Microphone") && m.name().equals("Queue backlog")
+                        && m.value().equals("0 blocks")
+                        && m.severity() == HealthReport.Severity.OK));
+        assertFalse(healthyReport.findings().stream().anyMatch(f ->
+                f.message().startsWith("Microphone DSP is overloaded")));
+        assertTrue(healthyReport.findings().stream().anyMatch(f ->
+                f.message().equals("Everything is running smoothly.")));
+    }
+
     @Test
     void brokenOutputIsCriticalAndNotSmooth() {
         VideoPipeline.Stats video = new VideoPipeline.Stats(Resolution.FULL_HD, 60, 0.5,

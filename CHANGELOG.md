@@ -16,6 +16,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   and a free-space floor; Stream Health already reported time-remaining.
 
 ### Improved
+- **Mic DSP overrun Stream Health**: overload / backlog findings name the queue
+  depth, overrun and drop counts, and tell you to pick a lighter noise model or
+  lower strength on Studio → Audio (same advice as the Audio diagnostics notice).
+  Dropped blocks escalate the finding to CRITICAL. Stream Health always lists
+  **Queue backlog** while the mic is capturing.
 - **Browser CSS injector hardening**: user CSS is clamped to 64 KiB before
   injection; the page script waits for `DOMContentLoaded` when the document is
   still loading, keeps payloads on `window.__streamableCss`, and installs a

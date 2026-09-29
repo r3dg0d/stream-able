@@ -225,13 +225,17 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             metrics.add(new Metric("Microphone", "DSP time per 10 ms block", millis(mic.dspMillis()),
                     "CPU time processing each block; must stay well under 10 ms.",
                     mic.dspMillis() > 6 ? Severity.WARNING : Severity.OK));
+            metrics.add(new Metric("Microphone", "Queue backlog", mic.backlogBlocks() + " blocks",
+                    "10 ms blocks waiting for the DSP worker. Above 3 skips AI noise cancellation; "
+                            + "far behind drops the stalest audio.",
+                    mic.overloaded() || mic.backlogBlocks() > 3 ? Severity.WARNING : Severity.OK));
             metrics.add(new Metric("Microphone", "Processing overruns", Long.toString(mic.overrunEvents()),
                     "Times the worker fell behind and skipped AI inference to keep latency fixed.",
                     mic.overrunEvents() > 0 ? Severity.WARNING : Severity.OK));
             metrics.add(new Metric("Microphone", "Dropped blocks", Long.toString(mic.droppedBlocks()),
                     "Audio discarded because processing was far behind.", mic.droppedBlocks() > 0 ? Severity.WARNING : Severity.OK));
             if (mic.overloaded() || mic.backlogBlocks() > 3) {
-                findings.add(new Finding(Severity.WARNING, "Microphone processing is falling behind."));
+                findings.add(new Finding(micOverloadSeverity(mic), micOverloadFinding(mic)));
             }
         }
         NoiseCancellationManager.Status noise = in.noise();
@@ -243,7 +247,8 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                     noise.realTimeFactor() > 0.8 ? Severity.WARNING : Severity.OK));
             if (noise.realTimeFactor() > 0.8) {
                 findings.add(new Finding(Severity.WARNING, "Noise cancellation cannot maintain real-time processing "
-                        + "with the current backend; Stream-able will switch to a lighter model."));
+                        + "with the current backend; Stream-able will switch to a lighter model. "
+                        + "On Studio → Audio prefer a lighter noise model or lower strength."));
             }
         } else if (noise != null && noise.state() == NoiseCancellationManager.Status.State.UNAVAILABLE) {
             findings.add(new Finding(Severity.INFO, noise.detail()));
@@ -276,6 +281,31 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             }
         }
         return worst;
+    }
+
+
+    /** Severity for a live microphone DSP overload: drops mean audible loss. */
+    static Severity micOverloadSeverity(MicrophoneProcessor.Stats mic) {
+        return mic.droppedBlocks() > 0 ? Severity.CRITICAL : Severity.WARNING;
+    }
+
+    /** Actionable Stream Health finding for DSP overload / backlog pressure. */
+    static String micOverloadFinding(MicrophoneProcessor.Stats mic) {
+        StringBuilder message = new StringBuilder("Microphone DSP is overloaded (");
+        message.append(mic.backlogBlocks()).append(" blocks backlog");
+        if (mic.overrunEvents() > 0) {
+            message.append(", ").append(mic.overrunEvents()).append(" overruns");
+        }
+        if (mic.droppedBlocks() > 0) {
+            message.append(", ").append(mic.droppedBlocks()).append(" blocks dropped");
+        }
+        message.append("). AI noise cancellation is skipped until the queue drains. ");
+        message.append("On Studio → Audio choose a lighter noise model or lower strength");
+        if (mic.dspMillis() > 6) {
+            message.append("; turn off unused EQ, de-esser or compressor stages if DSP time stays high");
+        }
+        message.append(".");
+        return message.toString();
     }
 
     public static String duration(long millis) {
