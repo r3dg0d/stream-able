@@ -139,6 +139,10 @@ tasks.named('test', Test) {
 }
 
 jar {
+    // Release / CI jar name encodes the Minecraft target so Modrinth/GitHub
+    // assets stay unambiguous across MC lines (e.g. stream-able-1.2.0-mc26.2-fabric.jar).
+    archiveFileName = "${project.archives_base_name}-${project.mod_version}-mc${project.minecraft_version}-fabric.jar"
+
     // Attribution ships with the artifact, as the MIT License requires.
     from('LICENSE') {
         rename { "${it}_${project.base.archivesName.get()}" }
@@ -146,4 +150,9 @@ jar {
     from('NOTICE') {
         rename { "${it}_${project.base.archivesName.get()}" }
     }
+}
+
+// Keep sources jar naming aligned (no fabric classifier; still versioned).
+tasks.named('sourcesJar', Jar).configure {
+    archiveFileName = "${project.archives_base_name}-${project.mod_version}-sources.jar"
 }

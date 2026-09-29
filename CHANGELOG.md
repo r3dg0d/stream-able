@@ -4,9 +4,29 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.2.0 - 2026-09-29
+
+Port to Minecraft 26.2 and polish.
+
+### Changed
+- **Minecraft 26.2** (was 26.1.2): Fabric Loader 0.19.5, Fabric API 0.161.0+26.2,
+  Loom 1.17.21, MCEF Modern `0.3.3+mc26.2.jcef146.0.10`, Plasmo Voice API 2.1.17.
+  Simple Voice Chat API stays 2.6.24 (matches `voicechat-fabric-2.6.24+26.2`).
+- **Render / GUI APIs for 26.2**: `TextureFormat` → `GpuFormat`; program capture
+  reads `gameRenderer.mainRenderTarget()`; Studio screens and the F1 HUD flag go
+  through `ClientGui` (`Minecraft.gui.screen()` / `setScreen()` /
+  `gui.hud.isHidden()`); rounded-rect pipeline uses `GpuFormat` attributes,
+  `withVertexBinding` and `PrimitiveTopology.QUADS`; stream HUD's second GUI pass
+  calls `GuiRenderer.render()` with no fog buffer.
+- Release jar is now named `stream-able-<ver>-mc26.2-fabric.jar`.
+- LICENSE is a clean dual-copyright MIT text (derivative note lives in NOTICE) so
+  GitHub can detect the MIT license.
+- CI `actions/upload-artifact` bumped `@v4` → `@v7` (Node 20 deprecation).
+
 ### Added
 - **GitHub Actions CI** (`.github/workflows/ci.yml`): version-sync (`mod_version` ↔ CHANGELOG)
-  plus Temurin 25 `./gradlew test` and remapped jar build on every push / PR to `main`.
+  plus Temurin 25 `./gradlew test` and remapped jar build on every push / PR to `main`
+  (landed in 1.1.0 cycle; documented here after the port).
 
 ## 1.1.0 - 2026-09-24
 

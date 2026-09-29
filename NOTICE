@@ -3,8 +3,9 @@ Stream-able
 
 Stream-able is licensed under the MIT License (see LICENSE). It is a derivative
 work of **Record-able** by JoEusebe (Minewind's Jo Eusebe), used and
-redistributed under the MIT License; the original copyright and permission
-notice are preserved in LICENSE, as the MIT License requires.
+redistributed under the MIT License. LICENSE carries both copyright lines
+(Stream-able contributors and Minewind's Jo Eusebe); this NOTICE documents
+what was inherited and which third-party components are bundled.
 
 Nothing in this project is copied from OBS Studio. OBS is referenced only as
 inspiration for workflow and terminology ("browser source", "transform box",

@@ -6,7 +6,7 @@
 
 Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-able) by JoEusebe. It keeps the recorder and adds what you need to actually go live: RTMP/RTMPS streaming, multistreaming, interactive Chromium **browser sources** composited over gameplay, a professional microphone chain with local AI noise cancellation, and first-class ultrawide support - without a second application on your machine.
 
-**One jar.** Drop `stream-able-<version>.jar` into `mods/` next to Fabric API. The browser engine library (MCEF Modern) is bundled; FFmpeg, the Chromium engine and the optional noise-cancellation models are downloaded on demand, pinned by version and SHA-256, and verified before anything runs.
+**One jar.** Drop `stream-able-<version>-mc26.2-fabric.jar` into `mods/` next to Fabric API. The browser engine library (MCEF Modern) is bundled; FFmpeg, the Chromium engine and the optional noise-cancellation models are downloaded on demand, pinned by version and SHA-256, and verified before anything runs.
 
 ---
 
@@ -158,7 +158,7 @@ With Simple Voice Chat 2.6 or newer installed, Stream-able registers as a voice 
 Plasmo Voice plays through its own OpenAL context, so Stream-able integrates through its client API (`pv-addon-streamable`): other players' voices go to the Plasmo Voice bus, and you can choose Plasmo Voice's already-processed microphone as your mic source. Stream-able warns if you stack aggressive noise suppression on top of Plasmo Voice's own. Plasmo Voice is never bundled.
 
 ### Browser audio
-The JCEF build MCEF Modern `0.3.3+mc26.1.jcef146.0.10` ships has no `CefAudioHandler`, so Chromium's audio cannot be intercepted natively. Stream-able taps it **inside the page** instead: a small script, registered through DevTools to run before the page's own scripts, routes `<audio>`/`<video>` elements and the page's Web Audio through a Web Audio graph and hands 16-bit PCM to Stream-able over a JCEF message router. Nothing is sent anywhere else. Each source's audio mode is applied in the page:
+The JCEF build MCEF Modern `0.3.3+mc26.2.jcef146.0.10` ships has no `CefAudioHandler`, so Chromium's audio cannot be intercepted natively. Stream-able taps it **inside the page** instead: a small script, registered through DevTools to run before the page's own scripts, routes `<audio>`/`<video>` elements and the page's Web Audio through a Web Audio graph and hands 16-bit PCM to Stream-able over a JCEF message router. Nothing is sent anywhere else. Each source's audio mode is applied in the page:
 
 | Mode | Your speakers | Recording and stream |
 | --- | --- | --- |
@@ -177,10 +177,10 @@ Note that MCEF Modern itself starts Chromium with `--disable-web-security` and a
 
 | | |
 | --- | --- |
-| Minecraft | **26.1.2** (Java Edition) |
+| Minecraft | **26.2** (Java Edition) |
 | Loader | Fabric >= 0.19.3 |
-| Java | **25** (what 26.1.2 itself requires) |
-| Fabric API | 0.155.2+26.1.2 |
+| Java | **25** (what 26.2 itself requires) |
+| Fabric API | 0.161.0+26.2 |
 | Everything else | Bundled or downloaded on demand - see Components |
 
 ### Components (downloaded on demand)
