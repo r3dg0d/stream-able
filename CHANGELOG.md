@@ -25,6 +25,8 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   the Browser Sources bus when the engine can script the frame.
 - **`speechSynthesis` local honour**: Off / Stream-only cancel or mute utterances
   locally (still not capturable; Chromium plays TTS outside Web Audio).
+- **Test flake**: `FFmpegProcessTimelineTest` uses 64 KiB frames so the OS pipe
+  backs up during the slow-consumer sleep (16-byte frames flaked on fast GHA).
 
 ## 1.2.0 - 2026-09-29
 
