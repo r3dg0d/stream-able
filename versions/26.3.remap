@@ -1,0 +1,12 @@
+# Minecraft 26.3 moved the GPU abstraction from com.mojang.blaze3d.* into
+# com.mojang.renderpearl.*. Shared sources are written against the 26.1/26.2
+# names; for this target the build rewrites these package prefixes first
+# (longest match wins, see build.gradle). Only moves belong here - anything whose
+# shape changed goes through src/compat/<line>.
+com.mojang.blaze3d.textures.=com.mojang.renderpearl.api.textures.
+com.mojang.blaze3d.opengl.=com.mojang.renderpearl.backend.opengl.
+com.mojang.blaze3d.systems.GpuDevice=com.mojang.renderpearl.api.device.GpuDevice
+com.mojang.blaze3d.GpuFormat=com.mojang.renderpearl.api.GpuFormat
+com.mojang.blaze3d.pipeline.RenderPipeline=com.mojang.renderpearl.api.pipeline.RenderPipeline
+com.mojang.blaze3d.PrimitiveTopology=com.mojang.renderpearl.api.pipeline.PrimitiveTopology
+com.mojang.blaze3d.vertex.VertexFormat=com.mojang.renderpearl.api.vertex.VertexFormat

@@ -1,5 +1,6 @@
 package dev.streamable.ui.studio;
 
+import dev.streamable.util.FolderOpener;
 import dev.streamable.StreamAbleClient;
 import dev.streamable.config.RecordingSettings;
 import dev.streamable.recording.DiskSpaceGuardian;
@@ -18,7 +19,6 @@ import dev.streamable.ui.kit.TextField;
 import dev.streamable.ui.kit.Theme;
 import dev.streamable.ui.kit.Toggle;
 import dev.streamable.ui.kit.Widgets;
-import net.minecraft.util.Util;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,8 +49,7 @@ final class RecordingPage {
         folder.add(Button.of("Open", () -> {
             Path dir = client.recording().outputDirectory(rec);
             try {
-                Files.createDirectories(dir);
-                Util.getPlatform().openPath(dir);
+                FolderOpener.open(dir);
             } catch (Exception e) {
                 s.error("Could not open " + dir + ".");
             }
@@ -188,8 +187,7 @@ final class RecordingPage {
         actions.add(Button.of("Open clips", () -> {
             Path dir = buffer.clipsDirectory(client.recording().outputDirectory(rec));
             try {
-                Files.createDirectories(dir);
-                Util.getPlatform().openPath(dir);
+                FolderOpener.open(dir);
             } catch (Exception e) {
                 s.error("Could not open " + dir + ".");
             }

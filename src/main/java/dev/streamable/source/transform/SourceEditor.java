@@ -1,5 +1,6 @@
 package dev.streamable.source.transform;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.source.BrowserSource;
 import dev.streamable.source.SourceList;
 
@@ -11,7 +12,7 @@ import java.util.UUID;
  * Interaction state for the OBS-style transform editor.
  *
  * <p>Deliberately free of Minecraft and OpenGL types: it takes canvas-space
- * points and GLFW key codes and mutates source transforms, which makes complete
+ * points and Minecraft key codes and mutates source transforms, which makes complete
  * drag gestures unit-testable without a client.</p>
  *
  * <p>Gestures follow the conventions the user asked for:</p>
@@ -185,11 +186,11 @@ public final class SourceEditor {
     /**
      * Nudges the selection with the arrow keys.
      *
-     * @param glfwKey    GLFW key code
+     * @param key    Minecraft key code (InputConstants.KEY_*)
      * @param shiftHeld  {@code true} for the 10 px step
      * @return {@code true} when the key was consumed
      */
-    public boolean onArrowKey(int glfwKey, boolean shiftHeld) {
+    public boolean onArrowKey(int key, boolean shiftHeld) {
         BrowserSource source = selected();
         if (source == null || source.locked()) {
             return false;
@@ -197,11 +198,11 @@ public final class SourceEditor {
         double step = shiftHeld ? 10.0 : 1.0;
         double dx = 0;
         double dy = 0;
-        switch (glfwKey) {
-            case org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT -> dx = -step;
-            case org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT -> dx = step;
-            case org.lwjgl.glfw.GLFW.GLFW_KEY_UP -> dy = -step;
-            case org.lwjgl.glfw.GLFW.GLFW_KEY_DOWN -> dy = step;
+        switch (key) {
+            case InputConstants.KEY_LEFT -> dx = -step;
+            case InputConstants.KEY_RIGHT -> dx = step;
+            case InputConstants.KEY_UP -> dy = -step;
+            case InputConstants.KEY_DOWN -> dy = step;
             default -> {
                 return false;
             }

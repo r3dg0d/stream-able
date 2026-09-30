@@ -1,4 +1,4 @@
-# Windows notes (Minecraft 26.2)
+# Windows notes (Minecraft 26.1.2, 26.2 and 26.3)
 
 Partial coverage for [issue #3](https://github.com/r3dg0d/stream-able/issues/3).
 This is a smoke checklist and platform quirks list — **a live Windows Minecraft
@@ -15,10 +15,10 @@ client session is still unverified**. CI on `windows-latest` (Temurin 25) runs
 
 ## Client smoke checklist (manual)
 
-Use a disposable Minecraft 26.2 + Fabric Loader install. Do **not** commit stream
+Use a disposable Minecraft (26.1.2, 26.2 or 26.3) + Fabric Loader install. Do **not** commit stream
 keys.
 
-1. Drop `stream-able-*-mc26.2-fabric.jar` and matching Fabric API into `mods/`.
+1. Drop the `stream-able-*-mc<your version>-fabric.jar` for your Minecraft version and matching Fabric API into `mods/`.
 2. Launch, open **Studio → Components**: install / verify FFmpeg (managed BtbN
    GPL build) and Chromium. Confirm progress / Retry / Verify work.
 3. Record a short local clip with any working encoder; open the file and check

@@ -1,11 +1,11 @@
 package dev.streamable.source.transform;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.source.BrowserSource;
 import dev.streamable.source.SourceList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.lwjgl.glfw.GLFW;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -121,20 +121,20 @@ class SourceEditorTest {
     @Test
     void arrowKeysNudgeByOnePixelAndTenWithShift() {
         editor.select(source.id());
-        assertTrue(editor.onArrowKey(GLFW.GLFW_KEY_RIGHT, false));
+        assertTrue(editor.onArrowKey(InputConstants.KEY_RIGHT, false));
         assertEquals(101, source.transform().x(), 1e-6);
-        assertTrue(editor.onArrowKey(GLFW.GLFW_KEY_DOWN, true));
+        assertTrue(editor.onArrowKey(InputConstants.KEY_DOWN, true));
         assertEquals(110, source.transform().y(), 1e-6);
-        assertTrue(editor.onArrowKey(GLFW.GLFW_KEY_LEFT, false));
+        assertTrue(editor.onArrowKey(InputConstants.KEY_LEFT, false));
         assertEquals(100, source.transform().x(), 1e-6);
     }
 
     @Test
     void arrowKeysIgnoreNonArrowsAndLockedSources() {
         editor.select(source.id());
-        assertFalse(editor.onArrowKey(GLFW.GLFW_KEY_A, false));
+        assertFalse(editor.onArrowKey(InputConstants.KEY_A, false));
         source.setLocked(true);
-        assertFalse(editor.onArrowKey(GLFW.GLFW_KEY_RIGHT, false));
+        assertFalse(editor.onArrowKey(InputConstants.KEY_RIGHT, false));
     }
 
     @Test

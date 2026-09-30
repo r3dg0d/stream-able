@@ -3,7 +3,7 @@ package dev.streamable.browser;
 /**
  * A live off-screen browser owned by Stream-able.
  *
- * <p>Deliberately expressed in primitives (GLFW key codes, canvas-local pixel
+ * <p>Deliberately expressed in primitives (Minecraft key codes, canvas-local pixel
  * coordinates, a raw GL texture name) rather than Minecraft or JCEF types, so
  * the compositor, the input router and the tests do not depend on which engine
  * is underneath. {@code McefBrowserHandle} is currently the only
@@ -62,9 +62,9 @@ public interface BrowserHandle extends AutoCloseable {
 
     void mouseScrolled(double localX, double localY, double amount);
 
-    void keyPressed(int glfwKey, int scancode, int modifiers);
+    void keyPressed(int key, int auxCode, int modifiers);
 
-    void keyReleased(int glfwKey, int scancode, int modifiers);
+    void keyReleased(int key, int auxCode, int modifiers);
 
     void charTyped(int codepoint);
 

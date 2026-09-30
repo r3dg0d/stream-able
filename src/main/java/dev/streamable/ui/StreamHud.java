@@ -1,5 +1,6 @@
 package dev.streamable.ui;
 
+import dev.streamable.compat.RenderCompat;
 import dev.streamable.util.ClientGui;
 
 import dev.streamable.StreamAbleClient;
@@ -15,7 +16,6 @@ import com.mojang.blaze3d.platform.Window;
 import dev.streamable.mixin.GameRendererAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 
@@ -91,7 +91,7 @@ public final class StreamHud {
             lastBounds = new int[4];
             return;
         }
-        GuiRenderState state = gameRenderer.gameRenderState().guiRenderState;
+        GuiRenderState state = RenderCompat.guiRenderState(gameRenderer);
         state.reset();   // the frame's own GUI has already been drawn
         Window window = mc.getWindow();
         GuiGraphicsExtractor graphics = new GuiGraphicsExtractor(mc, state,
@@ -101,9 +101,7 @@ public final class StreamHud {
         GameRendererAccessor access = (GameRendererAccessor) gameRenderer;
         access.streamable$setUseUiLightmap(true);
         try {
-            GuiRenderer renderer = access.streamable$guiRenderer();
-            renderer.render();
-            renderer.endFrame();
+            RenderCompat.renderGuiPass(gameRenderer);
         } finally {
             access.streamable$setUseUiLightmap(false);
         }

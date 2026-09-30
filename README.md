@@ -6,7 +6,7 @@
 
 Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-able) by JoEusebe. It keeps the recorder and adds what you need to actually go live: RTMP/RTMPS streaming, multistreaming, interactive Chromium **browser sources** composited over gameplay, a professional microphone chain with local AI noise cancellation, and first-class ultrawide support - without a second application on your machine.
 
-**One jar.** Drop `stream-able-<version>-mc26.2-fabric.jar` into `mods/` next to Fabric API. The browser engine library (MCEF Modern) is bundled; FFmpeg, the Chromium engine and the optional noise-cancellation models are downloaded on demand, pinned by version and SHA-256, and verified before anything runs.
+**One jar per Minecraft version** (26.1.2, 26.2 and 26.3). Drop the one that matches your game - `stream-able-<version>-mc26.1.2-fabric.jar`, `stream-able-<version>-mc26.2-fabric.jar` or `stream-able-<version>-mc26.3-fabric.jar` - into `mods/` next to Fabric API. The browser engine library (MCEF Modern) is bundled; FFmpeg, the Chromium engine and the optional noise-cancellation models are downloaded on demand, pinned by version and SHA-256, and verified before anything runs.
 
 ---
 
@@ -158,7 +158,7 @@ With Simple Voice Chat 2.6 or newer installed, Stream-able registers as a voice 
 Plasmo Voice plays through its own OpenAL context, so Stream-able integrates through its client API (`pv-addon-streamable`): other players' voices go to the Plasmo Voice bus, and you can choose Plasmo Voice's already-processed microphone as your mic source. Stream-able warns if you stack aggressive noise suppression on top of Plasmo Voice's own. Plasmo Voice is never bundled.
 
 ### Browser audio
-The JCEF build MCEF Modern `0.3.3+mc26.2.jcef146.0.10` ships has no `CefAudioHandler`, so Chromium's audio cannot be intercepted natively. Stream-able taps it **inside the page** instead: a small script, registered through DevTools to run before the page's own scripts, routes `<audio>`/`<video>` elements and the page's Web Audio through a Web Audio graph and hands 16-bit PCM to Stream-able over a JCEF message router. Nothing is sent anywhere else. Each source's audio mode is applied in the page:
+The JCEF build MCEF Modern 0.3.3 (`jcef146.0.10`) ships has no `CefAudioHandler`, so Chromium's audio cannot be intercepted natively. Stream-able taps it **inside the page** instead: a small script, registered through DevTools to run before the page's own scripts, routes `<audio>`/`<video>` elements and the page's Web Audio through a Web Audio graph and hands 16-bit PCM to Stream-able over a JCEF message router. Nothing is sent anywhere else. Each source's audio mode is applied in the page:
 
 | Mode | Your speakers | Recording and stream |
 | --- | --- | --- |
@@ -177,10 +177,11 @@ Note that MCEF Modern itself starts Chromium with `--disable-web-security` and a
 
 | | |
 | --- | --- |
-| Minecraft | **26.2** (Java Edition) |
-| Loader | Fabric >= 0.19.3 |
-| Java | **25** (what 26.2 itself requires) |
-| Fabric API | 0.161.0+26.2 |
+| Minecraft | **26.1.2**, **26.2** or **26.3** (Java Edition) - one jar per version |
+| Loader | Fabric >= 0.19.5 |
+| Java | **25** (what these Minecraft versions themselves require) |
+| Fabric API | 0.155.3+26.1.2 / 0.161.0+26.2 / 0.161.0+26.3 (the one for your Minecraft version) |
+| Graphics API | **OpenGL** (Minecraft's default). Stream-able captures the game through OpenGL, so with Video Settings > Graphics API set to Vulkan it stays out of the way and Stream Health explains why; set "Prefer OpenGL" and restart. |
 | Everything else | Bundled or downloaded on demand - see Components |
 
 ### Components (downloaded on demand)
@@ -223,7 +224,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 ## Verification status
 
-What has been checked, and how (Stream-able **1.3.2** on Minecraft **26.2**):
+What has been checked, and how (Stream-able **1.4.0** on Minecraft **26.1.2**, **26.2** and **26.3**):
 
 - **Unit and integration tests** (`./gradlew test`, 61 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, parsing of browser audio chunks, the disk-space
   guardian thresholds and shared recording ETA (`secondsRemaining`), Stream
@@ -237,6 +238,8 @@ What has been checked, and how (Stream-able **1.3.2** on Minecraft **26.2**):
   never-wired killMontages / deferred-capture config keys (ignored on load,
   dropped on save).
 - **Run on this machine (Linux, i9-14900K, RTX 4090 driver 595) in a dev client** on a virtual display with software OpenGL, so the game itself drew at about 13 FPS; encoding used the real GPU: managed FFmpeg install and encoder probing; the Studio pages at GUI scales 2 and 4 on a 2560x1080 window; a 2560x1080 NVENC recording (60 FPS constant, SAR 1:1, BT.709 tags; audio and video track lengths within 0.13 s); a live RTMP stream of the 1920x1080 center crop to a local server (104 s, 6.16 Mbps, reconnect back-off after the server stopped); the destination test (both reachable and unreachable server); browser sources on screen and in outputs; local-only routing; the stream HUD kept out of recordings; HUD dragging; microphone capture and meters; Simple Voice Chat 2.6.24 loading the plugin and connecting in singleplayer (no second player, so incoming voices were tested by unit tests only); the replay buffer starting on world join and saving a 20 s clip with aligned audio and video; the watermark in a recorded frame; browser-source audio in a recording (a Web Audio tone and an `<audio>` element tone from a test page, both measured in the file).
+- **Each Minecraft version, in a dev client** (Linux, virtual display, software OpenGL; 26.3 through headless Wayland because its OpenGL context needs an sRGB-capable visual that Xvfb lacks): the game boots with every mixin applied; the Studio opens on F6 and its pages render and respond to mouse clicks; on 26.1.2 and 26.2 a 15 s H.264 recording at 854x480 contains real game frames (measured); on 26.3 the replay buffer fills to 100% and its segments contain real game frames, and the stream HUD is drawn by the second GUI pass. On 26.3 with Vulkan the game no longer aborts and Stream Health shows the OpenGL requirement.
+- **Not verified on 26.1.2 / 26.3**: browser sources (the Chromium engine's system libraries are missing on the test machine), Simple Voice Chat / Plasmo Voice, F12 clip saving and a manual 26.3 recording on OpenGL (the Wayland run had no key injection), Windows, and a real (non-software) OpenGL driver on 26.3.
 - **Not verified at runtime**: automatic clip triggers in a real session (the trigger logic is unit-tested), a browser source's "Recording & stream only" mode being silent on speakers (the test display had no audio device), browser audio on a live stream rather than a recording.
 - **CI on Windows**: unit/integration tests and jar build run on `windows-latest` (Temurin 25). A live Windows Minecraft client session is still unverified — see [`docs/WINDOWS.md`](docs/WINDOWS.md) and [#3](https://github.com/r3dg0d/stream-able/issues/3) for the smoke checklist and platform quirks.
 - **Ingest reachability (handshake only, 2026-09-29 PT, no stream keys / no publish)**: default Twitch RTMP (`live.twitch.tv`), YouTube RTMPS (`a.rtmps.youtube.com`) and plain RTMP fallback (`a.rtmp.youtube.com`), and X RTMPS (`va.pscp.tv`) completed DNS → TCP → (TLS) → RTMP handshake from this machine. Optional regression: `STREAMABLE_LIVE_INGEST=1 ./gradlew test --tests '*LiveIngestReachabilityTest*'`.
@@ -247,16 +250,19 @@ What has been checked, and how (Stream-able **1.3.2** on Minecraft **26.2**):
 ## Building from source
 
 ```bash
-./gradlew build         # jar in build/libs/
+./gradlew build         # jar in build/libs/ for the default target (Minecraft 26.2)
+./gradlew build -Pmc_target=26.3    # 26.1.2, 26.2 or 26.3: one jar per Minecraft version
 ./gradlew test          # tests, no Minecraft needed
-./gradlew runClient     # dev client
+./gradlew runClient     # dev client (add -Pmc_target=... and -Prun_dir=run/26.3 to keep versions apart)
 ./gradlew test -Dstreamable.benchmarks=true --tests '*DspBenchmarkTest*'   # DSP cost on your machine
 ```
 
-Every dependency is pinned in `gradle.properties`. Minecraft 26.x ships deobfuscated, so the buildscript declares no mapping layer.
+Every dependency is pinned: shared ones in `gradle.properties`, and what differs per Minecraft version (Minecraft, Fabric API, MCEF Modern, the compat source directory and the shader set) in `versions/<mc>.properties`. Minecraft 26.x ships deobfuscated, so the buildscript declares no mapping layer. How the per-version code is organised is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#supported-minecraft-versions-and-the-compat-layer).
 
-CI (`.github/workflows/ci.yml`) runs version-sync plus Temurin 25 test and jar
-build on **Linux and Windows** for every push and pull request to `main`. Model
+CI (`.github/workflows/ci.yml`) runs version-sync (every supported Minecraft
+version has its version file, compat directory and README entry) plus Temurin 25
+test and jar build for **each of the three Minecraft versions on Linux** and the
+default version on **Windows**, for every push and pull request to `main`. Model
 and DSP benchmark suites stay opt-in skips when `STREAMABLE_MODEL_DIR` /
 `-Dstreamable.benchmarks` are unset.
 

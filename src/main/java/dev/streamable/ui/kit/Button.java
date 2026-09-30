@@ -1,5 +1,6 @@
 package dev.streamable.ui.kit;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.function.Supplier;
 
 /** A compact button. Primary actions are filled; secondary are quiet surfaces. */
@@ -129,7 +130,7 @@ public final class Button extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         pressed = true;

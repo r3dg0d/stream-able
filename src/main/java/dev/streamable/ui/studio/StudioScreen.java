@@ -1,5 +1,6 @@
 package dev.streamable.ui.studio;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.util.ClientGui;
 
 import dev.streamable.StreamAbleClient;
@@ -17,7 +18,6 @@ import dev.streamable.ui.kit.UiScreen;
 import dev.streamable.ui.kit.Widgets;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
@@ -112,19 +112,19 @@ public final class StudioScreen extends UiScreen {
 
     @Override
     protected boolean handleShortcut(int key, int modifiers) {
-        boolean ctrl = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
-        if (ctrl && key >= GLFW.GLFW_KEY_1 && key <= GLFW.GLFW_KEY_9) {
-            int index = key - GLFW.GLFW_KEY_1;
+        boolean ctrl = (modifiers & InputConstants.MOD_CONTROL) != 0;
+        if (ctrl && key >= InputConstants.KEY_1 && key <= InputConstants.KEY_9) {
+            int index = key - InputConstants.KEY_1;
             if (index < Page.values().length) {
                 show(Page.values()[index]);
                 return true;
             }
         }
-        if (ctrl && key == GLFW.GLFW_KEY_0) {
+        if (ctrl && key == InputConstants.KEY_0) {
             show(Page.values()[Page.values().length - 1]);
             return true;
         }
-        if (ctrl && key == GLFW.GLFW_KEY_R) {
+        if (ctrl && key == InputConstants.KEY_R) {
             studio.toggleRecording();
             return true;
         }
@@ -274,7 +274,7 @@ public final class StudioScreen extends UiScreen {
 
         @Override
         public boolean mouseDown(double mx, double my, int button) {
-            if (button == 0) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 show(target);
                 return true;
             }
@@ -319,7 +319,7 @@ public final class StudioScreen extends UiScreen {
 
         @Override
         public boolean mouseDown(double mx, double my, int button) {
-            if (button == 0) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 action.run();
                 return true;
             }

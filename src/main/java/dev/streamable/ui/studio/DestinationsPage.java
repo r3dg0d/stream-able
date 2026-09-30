@@ -1,5 +1,6 @@
 package dev.streamable.ui.studio;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.StreamAbleClient;
 import dev.streamable.streaming.StreamDestination;
 import dev.streamable.streaming.StreamPlatform;
@@ -137,7 +138,7 @@ final class DestinationsPage {
 
         @Override
         public boolean mouseDown(double mx, double my, int button) {
-            if (button == 0) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 return activate();
             }
             return false;

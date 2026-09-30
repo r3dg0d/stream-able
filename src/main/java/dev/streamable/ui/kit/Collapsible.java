@@ -1,5 +1,6 @@
 package dev.streamable.ui.kit;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -100,7 +101,7 @@ public final class Collapsible extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         if (enabledState != null && mx >= x + width - 36 && my < y + HEADER) {

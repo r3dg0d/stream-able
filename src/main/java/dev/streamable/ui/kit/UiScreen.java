@@ -1,5 +1,6 @@
 package dev.streamable.ui.kit;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.ui.StreamAbleScreen;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -7,7 +8,6 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -308,7 +308,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
         int key = event.key();
         int mods = event.modifiers();
         if (popup != null) {
-            if (key == GLFW.GLFW_KEY_ESCAPE) {
+            if (key == InputConstants.KEY_ESCAPE) {
                 closePopup();
                 return true;
             }
@@ -316,7 +316,7 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
                 return true;
             }
         }
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        if (key == InputConstants.KEY_ESCAPE) {
             if (focused instanceof TextField) {
                 focusNode(null);
                 return true;
@@ -324,15 +324,15 @@ public abstract class UiScreen extends Screen implements StreamAbleScreen {
             onEscape();
             return true;
         }
-        if (key == GLFW.GLFW_KEY_TAB) {
-            moveFocus((mods & GLFW.GLFW_MOD_SHIFT) != 0 ? -1 : 1);
+        if (key == InputConstants.KEY_TAB) {
+            moveFocus((mods & InputConstants.MOD_SHIFT) != 0 ? -1 : 1);
             return true;
         }
         if (focused != null) {
             if (focused.keyDown(key, mods)) {
                 return true;
             }
-            if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE)
+            if ((key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER || key == InputConstants.KEY_SPACE)
                     && !(focused instanceof TextField) && focused.activate()) {
                 return true;
             }

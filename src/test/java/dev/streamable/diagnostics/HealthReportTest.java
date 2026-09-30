@@ -43,6 +43,19 @@ class HealthReportTest {
     }
 
     @Test
+    void anExtraFindingComesFirstAndSetsTheWorstSeverity() {
+        HealthReport base = report(live(6150, 60, 1.0, 0.05, 0), -1, false);
+        HealthReport with = base.withFinding(HealthReport.Severity.CRITICAL, "Minecraft is not rendering with OpenGL");
+        assertEquals("Minecraft is not rendering with OpenGL", with.findings().getFirst().message());
+        assertEquals(base.findings().size() + 1, with.findings().size());
+        assertEquals(HealthReport.Severity.CRITICAL, with.worst());
+        assertEquals(base.metrics(), with.metrics());
+        assertEquals(base.network(), with.network());
+        // the original is untouched
+        assertFalse(base.findings().stream().anyMatch(f -> f.message().contains("OpenGL")));
+    }
+
+    @Test
     void healthyStream() {
         HealthReport report = report(live(6150, 60, 1.0, 0.05, 0), -1, false);
         assertEquals(HealthReport.Condition.GOOD, report.network());

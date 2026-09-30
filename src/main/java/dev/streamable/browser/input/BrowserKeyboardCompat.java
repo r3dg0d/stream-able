@@ -1,6 +1,8 @@
 package dev.streamable.browser.input;
 
-import org.lwjgl.glfw.GLFW;
+import dev.streamable.compat.InputCompat;
+import com.mojang.blaze3d.platform.InputConstants;
+
 
 /**
  * Works around MCEF/JCEF issue #4: editing keys do nothing in an off-screen browser.
@@ -33,7 +35,7 @@ import org.lwjgl.glfw.GLFW;
  * </ol>
  *
  * <p>Ordinary printable keys are deliberately excluded: Minecraft already
- * delivers a real GLFW character callback for those, and synthesising a second
+ * delivers a real character callback for those, and synthesising a second
  * one would type every letter twice.</p>
  */
 public final class BrowserKeyboardCompat {
@@ -48,72 +50,72 @@ public final class BrowserKeyboardCompat {
      * The character code a real keyboard would emit alongside this key press,
      * or {@link #NO_CHARACTER}.
      *
-     * @param glfwKey   GLFW key code
-     * @param modifiers GLFW modifier bitmask
+     * @param key       Minecraft key code (see InputConstants.KEY_*)
+     * @param modifiers Minecraft modifier bitmask (see InputConstants.MOD_*)
      */
-    public static int syntheticCodepoint(int glfwKey, int modifiers) {
+    public static int syntheticCodepoint(int key, int modifiers) {
         // With Ctrl/Alt/Super held the browser is receiving a shortcut, not text.
         // Emitting a character there would insert junk into the focused field
         // and can break Ctrl+A / Ctrl+C / Ctrl+V handling.
         if (hasShortcutModifier(modifiers)) {
             return NO_CHARACTER;
         }
-        return switch (glfwKey) {
-            case GLFW.GLFW_KEY_BACKSPACE -> 0x08;               // BS
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> 0x0D; // CR, as WM_CHAR delivers
-            case GLFW.GLFW_KEY_TAB -> 0x09;                      // HT
-            case GLFW.GLFW_KEY_ESCAPE -> 0x1B;                   // ESC
+        return switch (key) {
+            case InputConstants.KEY_BACKSPACE -> 0x08;               // BS
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> 0x0D; // CR, as WM_CHAR delivers
+            case InputConstants.KEY_TAB -> 0x09;                      // HT
+            case InputConstants.KEY_ESCAPE -> 0x1B;                   // ESC
             // Delete deliberately produces no character on any real platform;
             // Blink resolves DeleteForward from the key-down alone.
             default -> NO_CHARACTER;
         };
     }
 
-    public static boolean needsSyntheticCharacter(int glfwKey, int modifiers) {
-        return syntheticCodepoint(glfwKey, modifiers) != NO_CHARACTER;
+    public static boolean needsSyntheticCharacter(int key, int modifiers) {
+        return syntheticCodepoint(key, modifiers) != NO_CHARACTER;
     }
 
     /** True when Ctrl, Alt or Super is held, i.e. this is a shortcut not text entry. */
     public static boolean hasShortcutModifier(int modifiers) {
-        return (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) != 0;
+        return (modifiers & (InputConstants.MOD_CONTROL | InputConstants.MOD_ALT | InputConstants.MOD_SUPER)) != 0;
     }
 
     /**
      * Keys whose <em>default action</em> edits the document, and which the
      * JavaScript fallback therefore watches.
      */
-    public static boolean isEditingKey(int glfwKey) {
-        return switch (glfwKey) {
-            case GLFW.GLFW_KEY_BACKSPACE, GLFW.GLFW_KEY_DELETE,
-                 GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> true;
+    public static boolean isEditingKey(int key) {
+        return switch (key) {
+            case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE,
+                 InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> true;
             default -> false;
         };
     }
 
     /** Keys that only move the caret or focus and must never be altered. */
-    public static boolean isNavigationKey(int glfwKey) {
-        return switch (glfwKey) {
-            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN,
-                 GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END,
-                 GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_KEY_PAGE_DOWN -> true;
+    public static boolean isNavigationKey(int key) {
+        return switch (key) {
+            case InputConstants.KEY_LEFT, InputConstants.KEY_RIGHT, InputConstants.KEY_UP, InputConstants.KEY_DOWN,
+                 InputConstants.KEY_HOME, InputConstants.KEY_END,
+                 InputConstants.KEY_PAGEUP, InputConstants.KEY_PAGEDOWN -> true;
             default -> false;
         };
     }
 
     /** True for the modifier keys themselves, which never produce characters. */
-    public static boolean isModifierKey(int glfwKey) {
-        return switch (glfwKey) {
-            case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT,
-                 GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL,
-                 GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT,
-                 GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> true;
+    public static boolean isModifierKey(int key) {
+        return switch (key) {
+            case InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT,
+                 InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL,
+                 InputConstants.KEY_LALT, InputConstants.KEY_RALT,
+                 InputCompat.KEY_LEFT_SUPER, InputCompat.KEY_RIGHT_SUPER -> true;
             default -> false;
         };
     }
 
     /** Whether this key press is the paste shortcut, which needs the clipboard bridge. */
-    public static boolean isPasteShortcut(int glfwKey, int modifiers) {
-        return glfwKey == GLFW.GLFW_KEY_V
-                && (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
+    public static boolean isPasteShortcut(int key, int modifiers) {
+        return key == InputConstants.KEY_V
+                && (modifiers & (InputConstants.MOD_CONTROL | InputConstants.MOD_SUPER)) != 0;
     }
 }

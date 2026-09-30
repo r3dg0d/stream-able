@@ -1,6 +1,7 @@
 package dev.streamable.ui.kit;
 
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
+
 
 /**
  * A modal dialog: a scrim over the screen, a card with a title, a message,
@@ -85,7 +86,7 @@ public final class Dialog extends UiNode {
 
     @Override
     public boolean keyDown(int key, int modifiers) {
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             UiScreen screen = screen();
             UiNode focused = screen == null ? null : screen.focusedNode();
             if (focused == null || focused instanceof TextField) {

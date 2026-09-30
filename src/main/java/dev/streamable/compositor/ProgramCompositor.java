@@ -1,6 +1,7 @@
 package dev.streamable.compositor;
 
 import com.mojang.blaze3d.opengl.GlTexture;
+import dev.streamable.compat.RenderCompat;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
@@ -128,7 +129,7 @@ public final class ProgramCompositor implements AutoCloseable {
 
     /** The main render target's colour texture and size, or {@code null}. */
     private static GameTexture gameTexture() {
-        RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+        RenderTarget target = RenderCompat.mainRenderTarget();
         if (target == null) {
             return null;
         }

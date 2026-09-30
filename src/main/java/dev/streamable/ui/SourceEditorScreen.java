@@ -1,5 +1,7 @@
 package dev.streamable.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.streamable.compat.InputCompat;
 import dev.streamable.util.ClientGui;
 
 import dev.streamable.StreamAbleClient;
@@ -15,7 +17,6 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * The overlay editing screen: OBS-style transform, or direct browser interaction.
@@ -126,7 +127,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
             return false;
         }
         int[] hud = StreamHud.bounds();
-        if (event.button() == 0 && hud[2] > 0 && event.x() >= hud[0] && event.x() < hud[0] + hud[2]
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && hud[2] > 0 && event.x() >= hud[0] && event.x() < hud[0] + hud[2]
                 && event.y() >= hud[1] && event.y() < hud[1] + hud[3]) {
             // The stream HUD sits above the canvas: dragging it moves the HUD, not a source.
             draggingHud = true;
@@ -134,7 +135,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
             hudGrabY = event.y() - hud[1];
             return true;
         }
-        boolean shift = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+        boolean shift = (event.modifiers() & InputConstants.MOD_SHIFT) != 0;
         dragging = runtime.editor().onMousePress(toCanvas(event.x(), event.y()), shift);
         return dragging;
     }
@@ -159,7 +160,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
             return true;
         }
         if (dragging) {
-            boolean shift = (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+            boolean shift = (event.modifiers() & InputConstants.MOD_SHIFT) != 0;
             runtime.editor().onMouseDrag(toCanvas(event.x(), event.y()), shift);
             return true;
         }
@@ -226,7 +227,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
     public boolean keyPressed(KeyEvent event) {
         // Escape always returns control to the player: never trap them inside
         // browser focus.
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key() == InputConstants.KEY_ESCAPE) {
             if (mode == EditorMode.INTERACT) {
                 setMode(EditorMode.TRANSFORM);
                 rebuildWidgets();
@@ -242,17 +243,17 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
                 if (BrowserKeyboardCompat.isPasteShortcut(event.key(), event.modifiers())) {
                     handle.setClipboardHint(minecraft.keyboardHandler.getClipboard());
                 }
-                handle.keyPressed(event.key(), event.scancode(), event.modifiers());
+                handle.keyPressed(event.key(), InputCompat.auxCode(event), event.modifiers());
                 return true;
             }
             return false;
         }
         if (runtime.editor().onArrowKey(event.key(),
-                (event.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0)) {
+                (event.modifiers() & InputConstants.MOD_SHIFT) != 0)) {
             runtime.markDirty();
             return true;
         }
-        if (event.key() == GLFW.GLFW_KEY_DELETE && runtime.editor().selected() != null) {
+        if (event.key() == InputConstants.KEY_DELETE && runtime.editor().selected() != null) {
             runtime.removeSource(runtime.editor().selectedId());
             return true;
         }
@@ -265,7 +266,7 @@ public final class SourceEditorScreen extends Screen implements StreamAbleScreen
             BrowserSource source = runtime.editor().selected();
             BrowserHandle handle = source == null ? null : runtime.browsers().handleFor(source.id());
             if (handle != null) {
-                handle.keyReleased(event.key(), event.scancode(), event.modifiers());
+                handle.keyReleased(event.key(), InputCompat.auxCode(event), event.modifiers());
                 return true;
             }
         }

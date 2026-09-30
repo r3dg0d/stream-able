@@ -274,6 +274,14 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
         return value < 0 ? "-" : String.format(Locale.ROOT, "%,.0f kbps", value);
     }
 
+    /** A copy with one more finding, ahead of the others. */
+    public HealthReport withFinding(Severity severity, String message) {
+        List<Finding> all = new ArrayList<>();
+        all.add(new Finding(severity, message));
+        all.addAll(findings);
+        return new HealthReport(metrics, List.copyOf(all), network);
+    }
+
     /** The most severe finding, or {@link Severity#OK}. */
     public Severity worst() {
         Severity worst = Severity.OK;

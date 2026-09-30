@@ -330,21 +330,21 @@ public final class McefBrowserHandle implements BrowserHandle {
      * Backspace ({@code 0x08}) and Enter ({@code 0x0D}).</p>
      */
     @Override
-    public void keyPressed(int glfwKey, int scancode, int modifiers) {
+    public void keyPressed(int key, int auxCode, int modifiers) {
         if (closed.get()) {
             return;
         }
-        browser.onKeyPressed(new KeyEvent(glfwKey, scancode, modifiers));
-        int codepoint = BrowserKeyboardCompat.syntheticCodepoint(glfwKey, modifiers);
+        browser.onKeyPressed(new KeyEvent(key, auxCode, modifiers));
+        int codepoint = BrowserKeyboardCompat.syntheticCodepoint(key, modifiers);
         if (codepoint != BrowserKeyboardCompat.NO_CHARACTER) {
             browser.onCharTyped(new CharacterEvent(codepoint));
         }
     }
 
     @Override
-    public void keyReleased(int glfwKey, int scancode, int modifiers) {
+    public void keyReleased(int key, int auxCode, int modifiers) {
         if (!closed.get()) {
-            browser.onKeyReleased(new KeyEvent(glfwKey, scancode, modifiers));
+            browser.onKeyReleased(new KeyEvent(key, auxCode, modifiers));
         }
     }
 

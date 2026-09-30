@@ -1,7 +1,7 @@
 package dev.streamable.ui.kit;
 
-import org.lwjgl.glfw.GLFW;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleFunction;
 import java.util.function.DoubleSupplier;
@@ -87,7 +87,7 @@ public final class Slider extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         long now = System.currentTimeMillis();
@@ -127,21 +127,21 @@ public final class Slider extends UiNode {
 
     @Override
     public boolean keyDown(int key, int modifiers) {
-        double increment = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0 ? step : step * Math.max(1, Math.round((max - min) / step / 50));
+        double increment = (modifiers & InputConstants.MOD_SHIFT) != 0 ? step : step * Math.max(1, Math.round((max - min) / step / 50));
         return switch (key) {
-            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_DOWN -> {
+            case InputConstants.KEY_LEFT, InputConstants.KEY_DOWN -> {
                 set(value.getAsDouble() - increment);
                 yield true;
             }
-            case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP -> {
+            case InputConstants.KEY_RIGHT, InputConstants.KEY_UP -> {
                 set(value.getAsDouble() + increment);
                 yield true;
             }
-            case GLFW.GLFW_KEY_HOME -> {
+            case InputConstants.KEY_HOME -> {
                 set(min);
                 yield true;
             }
-            case GLFW.GLFW_KEY_END -> {
+            case InputConstants.KEY_END -> {
                 set(max);
                 yield true;
             }

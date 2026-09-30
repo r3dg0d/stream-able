@@ -3,6 +3,22 @@ plugins {
     id 'java'
 }
 
+// Per-Minecraft-version settings (see versions/README in gradle.properties).
+// A property passed with -P on the command line still wins over the file.
+def mcTarget = project.mc_target
+def mcVersionFile = file("versions/${mcTarget}.properties")
+if (!mcVersionFile.exists()) {
+    throw new GradleException("Unsupported mc_target '${mcTarget}'. Supported: " +
+            file('versions').listFiles().collect { it.name - '.properties' }.sort().join(', '))
+}
+def mcProps = new Properties()
+mcVersionFile.withInputStream { mcProps.load(it) }
+mcProps.each { k, v ->
+    if (!project.gradle.startParameter.projectProperties.containsKey(k)) {
+        project.ext.set(k as String, v as String)
+    }
+}
+
 version = project.mod_version
 group = project.maven_group
 
@@ -17,8 +33,65 @@ loom {
         client {
             client()
             ideConfigGenerated = true
+            // Separate run directories per Minecraft version keep saves and mods
+            // of one version out of another:  ./gradlew runClient -Prun_dir=run/26.3
+            runDir = findProperty('run_dir') ?: 'run'
+            // ./gradlew runClient -Pquick_play_world="New World" joins a world at start.
+            if (findProperty('quick_play_world')) {
+                programArgs '--quickPlaySingleplayer', findProperty('quick_play_world')
+            }
         }
     }
+}
+
+// Shared code lives in src/main; classes that touch a Minecraft surface which
+// differs between versions live in src/compat/<compat_dir>, one directory per
+// version line, each providing the same classes.
+sourceSets {
+    main {
+        java {
+            srcDir "src/compat/${project.compat_dir}/java"
+        }
+        resources {
+            // GLSL differs between Minecraft versions (26.3 needs explicit locations
+            // and a reordered uniform block), so shaders live in per-version sets.
+            srcDir "src/shaders/${project.shader_set}"
+        }
+    }
+}
+
+// Some Minecraft versions only moved classes to new packages. Those targets ship
+// versions/<mc_target>.remap (prefix=replacement per line); the build then compiles
+// a copy of the sources with the prefixes rewritten, longest prefix first.
+def remapFile = file("versions/${mcTarget}.remap")
+if (remapFile.exists()) {
+    def remaps = remapFile.readLines()
+            .findAll { it.trim() && !it.trim().startsWith('#') && it.contains('=') }
+            .collect { def i = it.indexOf('='); [it.substring(0, i).trim(), it.substring(i + 1).trim()] }
+            .sort { -it[0].length() }
+    def remapDir = layout.buildDirectory.dir('remapped-src')
+    def originalSrcDirs = sourceSets.main.java.srcDirs.toList()   // captured before it is repointed
+    def remapSources = tasks.register('remapSources', Sync) {
+        from(originalSrcDirs) { include '**/*.java' }
+        into remapDir
+        inputs.file remapFile
+        filter { String line ->
+            if (line.contains('com.mojang.blaze3d')) {
+                remaps.each { r -> line = line.replace(r[0], r[1]) }
+            }
+            line
+        }
+    }
+    sourceSets.main.java.srcDirs = [remapDir]
+    tasks.named('compileJava') {
+        dependsOn remapSources
+        doFirst {
+            if (source.isEmpty()) {
+                throw new GradleException("remapSources produced no Java sources for ${mcTarget}")
+            }
+        }
+    }
+    tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn remapSources }
 }
 
 repositories {

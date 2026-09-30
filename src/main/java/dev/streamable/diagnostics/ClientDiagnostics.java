@@ -160,6 +160,9 @@ public final class ClientDiagnostics {
     }
 
     private static String safeGl(int name) {
+        if (!dev.streamable.compositor.GraphicsBackend.openGlAvailable()) {
+            return "n/a (not OpenGL)";   // a GL call with no context aborts the JVM
+        }
         try {
             String value = GL11.glGetString(name);
             return value == null ? "?" : value;

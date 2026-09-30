@@ -1,12 +1,12 @@
 package dev.streamable.ui.studio;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.streamable.audio.dsp.EqualizerStage;
 import dev.streamable.audio.dsp.MicrophoneChain;
 import dev.streamable.config.MicrophoneSettings;
 import dev.streamable.ui.kit.Painter;
 import dev.streamable.ui.kit.Theme;
 import dev.streamable.ui.kit.UiNode;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Locale;
@@ -135,7 +135,7 @@ final class EqGraph extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
         int near = bandNear(mx, my);
@@ -188,8 +188,8 @@ final class EqGraph extends UiNode {
         if (bands.isEmpty()) {
             return false;
         }
-        if (key == GLFW.GLFW_KEY_RIGHT_BRACKET || key == GLFW.GLFW_KEY_LEFT_BRACKET) {
-            selected = Math.floorMod(selected + (key == GLFW.GLFW_KEY_RIGHT_BRACKET ? 1 : -1), bands.size());
+        if (key == InputConstants.KEY_RBRACKET || key == InputConstants.KEY_LBRACKET) {
+            selected = Math.floorMod(selected + (key == InputConstants.KEY_RBRACKET ? 1 : -1), bands.size());
             return true;
         }
         if (selected < 0 || selected >= bands.size()) {
@@ -197,10 +197,10 @@ final class EqGraph extends UiNode {
         }
         MicrophoneSettings.EqBand band = bands.get(selected);
         switch (key) {
-            case GLFW.GLFW_KEY_LEFT -> band.frequencyHz = Math.max(20, band.frequencyHz / 1.06);
-            case GLFW.GLFW_KEY_RIGHT -> band.frequencyHz = Math.min(20_000, band.frequencyHz * 1.06);
-            case GLFW.GLFW_KEY_UP -> band.gainDb = Math.min(18, band.gainDb + 0.5);
-            case GLFW.GLFW_KEY_DOWN -> band.gainDb = Math.max(-18, band.gainDb - 0.5);
+            case InputConstants.KEY_LEFT -> band.frequencyHz = Math.max(20, band.frequencyHz / 1.06);
+            case InputConstants.KEY_RIGHT -> band.frequencyHz = Math.min(20_000, band.frequencyHz * 1.06);
+            case InputConstants.KEY_UP -> band.gainDb = Math.min(18, band.gainDb + 0.5);
+            case InputConstants.KEY_DOWN -> band.gainDb = Math.max(-18, band.gainDb - 0.5);
             default -> {
                 return false;
             }

@@ -481,6 +481,9 @@ public final class StreamAbleClient {
             return;
         }
         adoptGameResolutionOnFirstRun();
+        if (!dev.streamable.compositor.GraphicsBackend.checkOpenGl()) {
+            return;   // no OpenGL context (Vulkan client): every capture path below needs one
+        }
         boolean editing = ClientGui.screen() instanceof dev.streamable.ui.SourceEditorScreen;
         boolean ownScreen = ClientGui.screen() instanceof dev.streamable.ui.StreamAbleScreen;
         List<BrowserSource> visible = sources.snapshot();
@@ -853,6 +856,10 @@ public final class StreamAbleClient {
                 freeDiskBytesCached(), config.recording.bitrateKbps,
                 micCapturing ? microphone.processor().stats() : null,
                 microphone.noise().status(), micCapturing));
+        String backendProblem = dev.streamable.compositor.GraphicsBackend.unsupportedReason();
+        if (backendProblem != null) {
+            cachedHealth = cachedHealth.withFinding(dev.streamable.diagnostics.HealthReport.Severity.CRITICAL, backendProblem);
+        }
         cachedHealthAt = now;
         return cachedHealth;
     }

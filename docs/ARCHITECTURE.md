@@ -244,23 +244,51 @@ Gson ignores unknown JSON keys on load, so retired Record-able carry-overs
   the config objects and live runtime state.
 - `StreamHud`, `SourceEditorScreen`: the HUD and the canvas editor.
 
-## Minecraft 26.2 call sites
+## Supported Minecraft versions and the compat layer
 
-Stream-able 1.3.2 targets Minecraft **26.2** (Chaos Cubed). A few render/GUI
-surfaces changed relative to 26.1.x; the live code goes through these helpers
-so the rest of the tree stays readable:
+Stream-able builds **one jar per Minecraft version**: 26.1.2, 26.2 and 26.3. All
+three ship Java 25 and are deobfuscated (mojmap), so there is no mapping layer and
+no `remapJar`. Choose the target with `-Pmc_target=<version>` (default 26.2).
 
-| Area | 26.2 surface | Where |
+Almost all of the code is shared. What differs lives in four places, each selected
+by the target's `versions/<mc>.properties`:
+
+| Mechanism | What it holds | Where |
 | --- | --- | --- |
-| Texture / GPU formats | `GpuFormat.RGBA8_UNORM` (was `TextureFormat.RGBA8`) | `compositor/ProgramTarget`, `ui/kit/UiPipelines` |
-| Program capture | `Minecraft.gameRenderer.mainRenderTarget()` | capture / compositor |
-| Screens and F1 HUD | `util/ClientGui` → `Minecraft.gui.screen()` / `setScreen()` / `gui.hud.isHidden()` | Studio, HUD, hotkeys |
-| Rounded-rect pipeline | `VertexFormat` + `GpuFormat` attributes, `withVertexBinding`, `PrimitiveTopology.QUADS` | `ui/kit/UiPipelines` |
-| Stream HUD second pass | `GuiRenderer.render()` with no fog buffer | `ui/StreamHud` |
+| `compat_dir` | Java that touches a Minecraft surface whose shape differs. Each version has its own copy of the same classes; shared code only calls those. | `src/compat/mc26_1`, `mc26_2`, `mc26_3` |
+| `shader_set` | GLSL for the mod's own pipeline (26.3 needs explicit `layout(location)` and a reordered `DynamicTransforms` block). | `src/shaders/glsl330`, `src/shaders/locations` |
+| `versions/<mc>.remap` | Pure package moves, applied to the sources before compiling (26.3 moved the GPU API from `com.mojang.blaze3d.*` to `com.mojang.renderpearl.*`). Only moves belong here. | `versions/26.3.remap` |
+| Dependencies | Minecraft, Fabric API, MCEF Modern and loader for that line. | `versions/<mc>.properties` |
 
-Loom 1.17.21; Minecraft 26.x ships deobfuscated (mojmap), so there is no
-Yarn layer and no `remapJar` task. The release jar is named
-`stream-able-<ver>-mc26.2-fabric.jar`.
+The compat classes, and what changes in each:
+
+| Class | 26.1.2 | 26.2 | 26.3 |
+| --- | --- | --- | --- |
+| `util/ClientGui` | screen, `setScreen` and the F1 flag on `Minecraft` | on `Minecraft.gui` | as 26.2 |
+| `compat/RenderCompat` | `getMainRenderTarget()`, `getGameRenderState()`, `TextureFormat.RGBA8`, fog buffer passed to `GuiRenderer.render` | `gameRenderer.mainRenderTarget()`, `gameRenderState()`, `GpuFormat.RGBA8_UNORM`, `render()` | as 26.2 |
+| `compat/InputCompat` | GLFW (`Type.KEYSYM`, `glfwGetMouseButton`, `KeyEvent.scancode()`) | as 26.1.2 | SDL (`Type.KEYBOARD`, `SDL_GetMouseState`, `KeyEvent.keycode()`, `KEY_LGUI`/`KEY_RGUI`) |
+| `ui/kit/UiPipelines` | `VertexFormatElement` statics, `withVertexFormat` | `GpuFormat` attributes, `withVertexBinding`, `PrimitiveTopology` | as 26.2 |
+| `mixin/GameRendererAccessor` | also exposes `fogRenderer` | `guiRenderer`, `useUiLightmap` | as 26.2 |
+| `mixin/GameRendererMixin` | injects `render(DeltaTracker, boolean)` | same | injects `render()` |
+
+Rules that keep the split honest:
+
+- **Input values come from `InputConstants`, never from literals or GLFW.** 26.3
+  renumbers everything: keys are SDL scancodes (`KEY_A` is 4, not 65), the left
+  mouse button is 1 (not 0), `REPEAT` is -1 and `MOD_SHIFT` is a two-bit mask. Use
+  `InputConstants.KEY_*`, `MOD_*` and `MOUSE_BUTTON_*`, and test modifiers with
+  `(mods & MOD_X) != 0`, never `==`.
+- **Anything that only fails at runtime must be run.** Mixin targets, shaders and
+  uniform-block layouts are strings; a compile can pass while 26.3 aborts. Boot each
+  target in a dev client before calling it supported.
+- **No raw OpenGL without a context.** `compositor/GraphicsBackend` checks that the
+  render thread has GL capabilities; on a Vulkan client (an option since 26.2, and
+  a fallback when OpenGL cannot start) `StreamAbleClient.onFrameRendered` returns
+  early and Stream Health explains the fix, instead of LWJGL aborting the JVM.
+
+To add a version: create `versions/<mc>.properties`, reuse the closest `compat_dir`
+and `shader_set` (or copy them), add the target to the CI matrix, and run the
+client.
 
 ## Platform notes
 

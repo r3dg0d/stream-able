@@ -1,5 +1,6 @@
 package dev.streamable.ui.kit;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -72,7 +73,7 @@ public final class Toggle extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         setter.accept(!value.getAsBoolean());

@@ -1,5 +1,6 @@
 package dev.streamable;
 
+import dev.streamable.compat.InputCompat;
 import dev.streamable.util.ClientGui;
 
 import dev.streamable.ui.SourceEditorScreen;
@@ -12,7 +13,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.InputConstants;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Client entry point.
@@ -79,20 +79,20 @@ public final class StreamAble implements ClientModInitializer {
 
     private void registerKeyBindings() {
         // Defaults avoid Minecraft's own bindings and the F3 debug chords.
-        toggleRecordingKey = register("toggle_recording", GLFW.GLFW_KEY_F9);
-        toggleStreamingKey = register("toggle_streaming", GLFW.GLFW_KEY_F10);
-        openStudioKey = register("open_studio", GLFW.GLFW_KEY_F6);
-        toggleSourceEditorKey = register("toggle_source_editor", GLFW.GLFW_KEY_F7);
-        toggleHudKey = register("toggle_overlays", GLFW.GLFW_KEY_F8);
+        toggleRecordingKey = register("toggle_recording", InputConstants.KEY_F9);
+        toggleStreamingKey = register("toggle_streaming", InputConstants.KEY_F10);
+        openStudioKey = register("open_studio", InputConstants.KEY_F6);
+        toggleSourceEditorKey = register("toggle_source_editor", InputConstants.KEY_F7);
+        toggleHudKey = register("toggle_overlays", InputConstants.KEY_F8);
         // Microphone controls start unbound: every obvious key is already a
         // game control for someone, so the player chooses.
-        toggleMicMuteKey = register("toggle_mic_mute", GLFW.GLFW_KEY_UNKNOWN);
-        pushToTalkKey = register("push_to_talk", GLFW.GLFW_KEY_UNKNOWN);
-        pushToMuteKey = register("push_to_mute", GLFW.GLFW_KEY_UNKNOWN);
-        toggleNoiseBypassKey = register("toggle_noise_bypass", GLFW.GLFW_KEY_UNKNOWN);
+        toggleMicMuteKey = register("toggle_mic_mute", InputConstants.UNKNOWN.getValue());
+        pushToTalkKey = register("push_to_talk", InputConstants.UNKNOWN.getValue());
+        pushToMuteKey = register("push_to_mute", InputConstants.UNKNOWN.getValue());
+        toggleNoiseBypassKey = register("toggle_noise_bypass", InputConstants.UNKNOWN.getValue());
         // F12 is unused by vanilla and, unlike F4, is not part of an F3 debug chord.
-        saveReplayKey = register("save_replay", GLFW.GLFW_KEY_F12);
-        toggleReplayBufferKey = register("toggle_replay_buffer", GLFW.GLFW_KEY_UNKNOWN);
+        saveReplayKey = register("save_replay", InputConstants.KEY_F12);
+        toggleReplayBufferKey = register("toggle_replay_buffer", InputConstants.UNKNOWN.getValue());
     }
 
     /**
@@ -105,11 +105,11 @@ public final class StreamAble implements ClientModInitializer {
         if (key == null || key.equals(InputConstants.UNKNOWN) || client.getWindow() == null) {
             return false;
         }
-        if (key.getType() == InputConstants.Type.KEYSYM) {
-            return InputConstants.isKeyDown(client.getWindow(), key.getValue());
+        if (InputCompat.isKeyboardKey(key)) {
+            return InputCompat.isKeyDown(client, key.getValue());
         }
         if (key.getType() == InputConstants.Type.MOUSE) {
-            return GLFW.glfwGetMouseButton(client.getWindow().handle(), key.getValue()) == GLFW.GLFW_PRESS;
+            return InputCompat.isMouseButtonDown(client, key.getValue());
         }
         return mapping.isDown();
     }
@@ -123,8 +123,8 @@ public final class StreamAble implements ClientModInitializer {
     }
 
     private static KeyMapping register(String name, int defaultKey) {
-        return KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.streamable." + name, InputConstants.Type.KEYSYM, defaultKey, CATEGORY));
+        return KeyMappingHelper.registerKeyMapping(InputCompat.keyMapping(
+                "key.streamable." + name, defaultKey, CATEGORY));
     }
 
     private void onClientTick(Minecraft client) {

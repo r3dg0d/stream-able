@@ -2,7 +2,44 @@
 
 All notable changes to Stream-able. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 1.4.0 - 2026-09-29
+
+Stream-able now builds for **Minecraft 26.1.2, 26.2 and 26.3**, one jar each
+(`stream-able-1.4.0-mc<version>-fabric.jar`).
+
+### Added
+- **Minecraft 26.1.2 and 26.3 support** alongside 26.2. Fabric API 0.155.3+26.1.2,
+  0.161.0+26.2 and 0.161.0+26.3; MCEF Modern `0.3.3+mc26.1`, `+mc26.2` and `+mc26.3`
+  (`jcef146.0.10`). Choose the target with `-Pmc_target=<version>`; what differs per
+  version lives in `versions/<mc>.properties`, `src/compat/<line>` and
+  `src/shaders/<set>` (see docs/ARCHITECTURE.md).
+- **Minecraft 26.3 port.** 26.3 replaced GLFW with SDL and moved the GPU API to
+  `com.mojang.renderpearl`. Input now uses `InputConstants` (SDL scancodes, left mouse
+  button 1, SDL modifier masks) through `InputCompat`; the GPU package move is applied
+  by `versions/26.3.remap`; the render hook is `GameRenderer.render()`; the mod's
+  shaders have a 26.3 set (explicit locations, reordered `DynamicTransforms` block).
+- **CI builds and tests all three versions** on Linux (26.2 also on Windows), and the
+  version-sync check covers every target.
+- **`FolderOpener`**: "Open logs / recordings / clips folder" launches the desktop's
+  opener itself (26.3 removed Minecraft's `Util.OS.openPath`), with the path passed as
+  one argument.
+
+### Fixed
+- **Crash on a Vulkan client.** Minecraft 26.2+ can render with Vulkan (Video Settings >
+  Graphics API), and falls back to it when OpenGL cannot start. Stream-able's
+  compositor called raw OpenGL with no context, which LWJGL treats as fatal, aborting
+  the whole game (SIGABRT) the first time a frame was composed. It now checks for an
+  OpenGL context, stays out of the render loop otherwise, and Stream Health shows a
+  critical finding naming the setting to change ("Prefer OpenGL", then restart).
+  Diagnostics no longer query GL when there is no context.
+- **Studio clicks on 26.3.** The UI kit tested the left mouse button as `0`; 26.3
+  numbers it `1`, so every Studio control would have ignored clicks. All checks use
+  `InputConstants.MOUSE_BUTTON_LEFT`.
+
+### Changed
+- Key, modifier and mouse-button values in shared code come from `InputConstants`
+  instead of GLFW, so they are correct on every supported version.
+- `mod_version` 1.4.0; the fabric loader requirement is 0.19.5 on every target.
 
 ### Improved
 - **Stream HUD disk ETA badge**: while recording, the compact HUD shows
@@ -18,6 +55,7 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
   from settings; stale JSON keys are ignored on load (same pattern as the
   retired recording-overlay fields). Automatic kill clips remain via
   `autoClipOnKill`.
+
 
 ## 1.3.2 - 2026-09-29
 

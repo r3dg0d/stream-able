@@ -1,7 +1,7 @@
 package dev.streamable.ui.kit;
 
-import org.lwjgl.glfw.GLFW;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
@@ -58,7 +58,7 @@ public final class Segmented extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         int index = (int) ((mx - x) / (width / (float) options.size()));
@@ -69,11 +69,11 @@ public final class Segmented extends UiNode {
     @Override
     public boolean keyDown(int key, int modifiers) {
         int index = selected.getAsInt();
-        if (key == GLFW.GLFW_KEY_LEFT) {
+        if (key == InputConstants.KEY_LEFT) {
             setter.accept(Math.max(0, index - 1));
             return true;
         }
-        if (key == GLFW.GLFW_KEY_RIGHT) {
+        if (key == InputConstants.KEY_RIGHT) {
             setter.accept(Math.min(options.size() - 1, index + 1));
             return true;
         }

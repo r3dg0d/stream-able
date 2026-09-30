@@ -1,7 +1,7 @@
 package dev.streamable.ui.kit;
 
-import org.lwjgl.glfw.GLFW;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
@@ -65,7 +65,7 @@ public final class Dropdown extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         open();
@@ -88,11 +88,11 @@ public final class Dropdown extends UiNode {
             return false;
         }
         int index = selected.getAsInt();
-        if (key == GLFW.GLFW_KEY_UP) {
+        if (key == InputConstants.KEY_UP) {
             setter.accept(Math.max(0, index - 1));
             return true;
         }
-        if (key == GLFW.GLFW_KEY_DOWN) {
+        if (key == InputConstants.KEY_DOWN) {
             setter.accept(Math.min(values.size() - 1, index + 1));
             return true;
         }
@@ -192,9 +192,9 @@ public final class Dropdown extends UiNode {
         @Override
         public boolean keyDown(int key, int modifiers) {
             switch (key) {
-                case GLFW.GLFW_KEY_UP -> highlight = Math.max(0, highlight - 1);
-                case GLFW.GLFW_KEY_DOWN -> highlight = Math.min(values.size() - 1, highlight + 1);
-                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+                case InputConstants.KEY_UP -> highlight = Math.max(0, highlight - 1);
+                case InputConstants.KEY_DOWN -> highlight = Math.min(values.size() - 1, highlight + 1);
+                case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER, InputConstants.KEY_SPACE -> {
                     setter.accept(highlight);
                     UiScreen screen = owner.screen();
                     if (screen != null) {

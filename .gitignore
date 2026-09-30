@@ -14,6 +14,7 @@ out/
 # Fabric Loom dev runtime
 run/
 runs/
+run-test/
 
 # Reference checkout of the browser engine, kept locally for API inspection.
 # Stream-able depends on the published MCEF Modern artifact, not on this tree.

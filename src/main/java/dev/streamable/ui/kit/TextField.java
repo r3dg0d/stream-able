@@ -1,7 +1,7 @@
 package dev.streamable.ui.kit;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -167,7 +167,7 @@ public final class TextField extends UiNode {
 
     @Override
     public boolean mouseDown(double mx, double my, int button) {
-        if (button != 0 || !isEnabled()) {
+        if (button != InputConstants.MOUSE_BUTTON_LEFT || !isEnabled()) {
             return false;
         }
         requestFocus();
@@ -220,11 +220,11 @@ public final class TextField extends UiNode {
 
     @Override
     public boolean keyDown(int key, int modifiers) {
-        boolean shift = (modifiers & GLFW.GLFW_MOD_SHIFT) != 0;
-        boolean control = (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
+        boolean shift = (modifiers & InputConstants.MOD_SHIFT) != 0;
+        boolean control = (modifiers & (InputConstants.MOD_CONTROL | InputConstants.MOD_SUPER)) != 0;
         var keyboard = Minecraft.getInstance().keyboardHandler;
         switch (key) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (anchor != cursor) {
                     insert("");
                 } else if (cursor > 0) {
@@ -233,64 +233,64 @@ public final class TextField extends UiNode {
                     anchor = cursor;
                 }
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 if (anchor != cursor) {
                     insert("");
                 } else if (cursor < text.length()) {
                     commit(text.substring(0, cursor) + text.substring(cursor + 1));
                 }
             }
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 cursor = Math.max(0, cursor - 1);
                 if (!shift) {
                     anchor = cursor;
                 }
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 cursor = Math.min(text.length(), cursor + 1);
                 if (!shift) {
                     anchor = cursor;
                 }
             }
-            case GLFW.GLFW_KEY_HOME -> {
+            case InputConstants.KEY_HOME -> {
                 cursor = 0;
                 if (!shift) {
                     anchor = 0;
                 }
             }
-            case GLFW.GLFW_KEY_END -> {
+            case InputConstants.KEY_END -> {
                 cursor = text.length();
                 if (!shift) {
                     anchor = cursor;
                 }
             }
-            case GLFW.GLFW_KEY_A -> {
+            case InputConstants.KEY_A -> {
                 if (!control) {
                     return false;
                 }
                 anchor = 0;
                 cursor = text.length();
             }
-            case GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_X -> {
+            case InputConstants.KEY_C, InputConstants.KEY_X -> {
                 if (!control) {
                     return false;
                 }
                 // Masked secrets are never copied out of the field.
                 if (anchor != cursor && !(secret && !revealed)) {
                     keyboard.setClipboard(text.substring(Math.min(anchor, cursor), Math.max(anchor, cursor)));
-                    if (key == GLFW.GLFW_KEY_X) {
+                    if (key == InputConstants.KEY_X) {
                         insert("");
                     }
                 }
             }
-            case GLFW.GLFW_KEY_V -> {
+            case InputConstants.KEY_V -> {
                 if (!control) {
                     return false;
                 }
                 String clip = keyboard.getClipboard().replace("\n", "").replace("\r", "");
                 insert(clip.strip());
             }
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+            case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
                 UiScreen screen = screen();
                 if (screen != null) {
                     screen.focusNode(null);

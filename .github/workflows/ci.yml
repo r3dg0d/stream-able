@@ -29,27 +29,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check mod_version / minecraft_version match docs
+      - name: Check mod_version and every supported Minecraft version match docs
         run: |
           set -euo pipefail
           ver=$(sed -n 's/^mod_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
-          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
+          default=$(sed -n 's/^mc_target=//p' gradle.properties | head -1 | tr -d '[:space:]')
           test -n "$ver"
-          test -n "$mc"
+          test -f "versions/${default}.properties"
           grep -E "^## ${ver}( |$)" CHANGELOG.md
-          grep -F "Minecraft ${mc}" CHANGELOG.md
-          grep -F "mc${mc}-fabric" README.md
-          grep -E "^\| Minecraft \| \*\*${mc}\*\*" README.md
-          echo "mod_version=${ver} minecraft_version=${mc} OK in CHANGELOG + README"
+          for f in versions/*.properties; do
+            mc=$(sed -n 's/^minecraft_version=//p' "$f" | head -1 | tr -d '[:space:]')
+            test "$mc" = "$(basename "$f" .properties)"
+            test -d "src/compat/$(sed -n 's/^compat_dir=//p' "$f" | head -1 | tr -d '[:space:]')"
+            grep -F "mc${mc}-fabric" README.md
+            grep -F "**${mc}**" README.md
+            echo "Minecraft ${mc}: version file, compat dir and README OK"
+          done
+          grep -F "Minecraft ${default}" CHANGELOG.md
+          echo "mod_version=${ver} default target=${default} OK"
 
   test:
-    name: Test and build (${{ matrix.os }})
+    name: Test and build (${{ matrix.os }}, MC ${{ matrix.mc }})
     runs-on: ${{ matrix.os }}
     needs: version-sync
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # One jar per Minecraft version. Windows only proves the default
+        # target's sources compile there; the version split is platform-neutral.
+        include:
+          - { os: ubuntu-latest, mc: '26.1.2' }
+          - { os: ubuntu-latest, mc: '26.2' }
+          - { os: ubuntu-latest, mc: '26.3' }
+          - { os: windows-latest, mc: '26.2' }
     steps:
       - uses: actions/checkout@v7
 
@@ -65,10 +77,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Test
-        run: ./gradlew test --no-daemon --stacktrace
+        run: ./gradlew test -Pmc_target=${{ matrix.mc }} --no-daemon --stacktrace
 
       - name: Build jar
-        run: ./gradlew build -x test --no-daemon --stacktrace
+        run: ./gradlew build -x test -Pmc_target=${{ matrix.mc }} --no-daemon --stacktrace
 
       - name: Assert jar name encodes versions
         # Catches archiveFileName drift vs gradle.properties / version-sync.
@@ -76,17 +88,17 @@ jobs:
         run: |
           set -euo pipefail
           ver=$(sed -n 's/^mod_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
-          mc=$(sed -n 's/^minecraft_version=//p' gradle.properties | head -1 | tr -d '[:space:]')
+          mc='${{ matrix.mc }}'
           jar="build/libs/stream-able-${ver}-mc${mc}-fabric.jar"
           test -f "$jar"
           echo "OK $jar"
 
       - name: Upload jar
-        # One jar artifact from Linux is enough; Windows proves the same sources compile.
+        # One jar per Minecraft version from Linux; Windows proves the same sources compile.
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
-          name: stream-able-jar
+          name: stream-able-jar-mc${{ matrix.mc }}
           # Named stream-able-<ver>-mc<mc>-fabric.jar by build.gradle
           path: |
             build/libs/stream-able-*.jar

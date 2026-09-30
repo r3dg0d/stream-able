@@ -102,8 +102,8 @@ final class AdvancedPage {
                         + "and URL credential removed."), 130);
         actions.add(Button.of("Open logs folder", () -> {
             try {
-                net.minecraft.util.Util.getPlatform().openPath(FabricLoader.getInstance().getGameDir().resolve("logs"));
-            } catch (RuntimeException e) {
+                dev.streamable.util.FolderOpener.open(FabricLoader.getInstance().getGameDir().resolve("logs"));
+            } catch (java.io.IOException | RuntimeException e) {
                 s.error("Could not open the logs folder.");
             }
         }).variant(Button.Variant.GHOST), 110);
