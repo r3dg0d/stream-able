@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "streamable-gametest",
+  "version": "1.0.0",
+  "name": "Stream-able client game test",
+  "environment": "client",
+  "license": "MIT",
+  "entrypoints": {
+    "fabric-client-gametest": ["dev.streamable.gametest.StreamAbleBootGameTest"]
+  },
+  "depends": {
+    "streamable": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

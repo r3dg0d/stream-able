@@ -2,6 +2,17 @@
 
 All notable changes to Stream-able. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **Boot test in CI.** A Fabric client game test starts a real client and a world on each
+  supported Minecraft version, presses the Studio key through the game's own input path,
+  waits for the Studio and the canvas editor to open (which loads the mod's shaders and
+  pipeline), takes screenshots, and checks that the render mixin is firing and that the
+  OpenGL/Vulkan guard agrees with the backend in use. `./gradlew runClientGameTest -Pmc_target=<mc>`.
+  Mixin targets, shaders and key numbering only fail at runtime, so this is what makes
+  "supports version X" checkable.
+
 ## 1.4.0 - 2026-09-29
 
 Stream-able now builds for **Minecraft 26.1.2, 26.2 and 26.3**, one jar each

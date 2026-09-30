@@ -94,6 +94,20 @@ if (remapFile.exists()) {
     tasks.matching { it.name == 'sourcesJar' }.configureEach { dependsOn remapSources }
 }
 
+// Client game test: boots a real client and a world and drives the Studio through the
+// game's own input path. Mixins, shaders and key handling only fail at runtime, so this
+// is the check that catches a broken Minecraft version.   ./gradlew runClientGameTest
+fabricApi {
+    configureTests {
+        createSourceSet = true
+        modId = 'streamable-gametest'
+        enableGameTests = false
+        enableClientGameTests = true
+        eula = true
+        clearRunDirectory = true
+    }
+}
+
 repositories {
     mavenCentral()
     // MCEF Modern

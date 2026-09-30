@@ -469,6 +469,13 @@ public final class StreamAbleClient {
         }
     }
 
+    private final java.util.concurrent.atomic.AtomicLong framesSeen = new java.util.concurrent.atomic.AtomicLong();
+
+    /** How many times the render hook has run. The client game test uses this to prove the mixin applied. */
+    public long framesSeen() {
+        return framesSeen.get();
+    }
+
     /**
      * Per-frame work, at the tail of the game render pass.
      *
@@ -476,6 +483,7 @@ public final class StreamAbleClient {
      * game's render loop down with it.</p>
      */
     public void onFrameRendered() {
+        framesSeen.incrementAndGet();
         Minecraft client = Minecraft.getInstance();
         if (client == null || client.getWindow() == null) {
             return;
