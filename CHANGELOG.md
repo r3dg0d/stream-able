@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- FFmpeg probe and mux deadlines now cover output collection. Silent or stuck
+  binaries cannot block before the timeout check; output is drained concurrently
+  with bounded diagnostic memory, and interruption terminates the owned process.
+  Recording audio muxes have a two-minute deadline and retain separate source
+  files on failure.
 - Config saves create unique temporary files and restrict permissions before
   writing credentials. A stale temporary symlink cannot overwrite another file,
   and failed saves clean up their own partial file.

@@ -296,11 +296,9 @@ public final class ReplayBuffer {
                     : new AudioProfile(AudioCodec.AAC, 192, AudioMixer.SAMPLE_RATE, 2);
             List<String> command = FFmpegCommandBuilder.buildClipCommand(ffmpeg.executable(), list.toString(),
                     wav.toString(), clipAudio, out.toString());
-            Process mux = FFmpegProcesses.builder(command).redirectErrorStream(true).start();
-            byte[] log = mux.getInputStream().readAllBytes();
-            if (!mux.waitFor(120, TimeUnit.SECONDS) || mux.exitValue() != 0) {
-                mux.destroyForcibly();
-                String tail = new String(log, StandardCharsets.UTF_8).strip();
+            FFmpegProcesses.Result mux = FFmpegProcesses.run(command, 120);
+            if (mux.exitCode() != 0) {
+                String tail = mux.output().strip();
                 throw new IOException("Could not write the clip" + (tail.isEmpty() ? "." : ": "
                         + tail.lines().reduce((a, b) -> b).orElse("")));
             }

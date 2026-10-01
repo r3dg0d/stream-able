@@ -415,12 +415,9 @@ public final class RecordingController {
         List<String> command = FFmpegCommandBuilder.buildMuxCommand(ffmpeg.executable(),
                 videoFile.toAbsolutePath().toString(), tracks, activeAudioProfile, finalFile.toAbsolutePath().toString());
         try {
-            Process mux = FFmpegProcesses.builder(command).redirectErrorStream(true).start();
-            String output;
-            try (var stream = mux.getInputStream()) {
-                output = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            }
-            if (mux.waitFor() == 0 && Files.exists(finalFile)) {
+            FFmpegProcesses.Result mux = FFmpegProcesses.run(command, 120);
+            String output = mux.output();
+            if (mux.exitCode() == 0 && Files.exists(finalFile)) {
                 Files.deleteIfExists(videoFile);
                 for (WavFileWriter writer : writers) {
                     Files.deleteIfExists(writer.path());

@@ -8,7 +8,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Finds and describes the FFmpeg binary, once, for the whole mod.
@@ -143,20 +142,12 @@ public final class FFmpegManager {
     /** Runs {@code ffmpeg -version}; {@code null} when the binary does not work. */
     private static String queryVersion(String executable) {
         try {
-            Process process = FFmpegProcesses.builder(List.of(executable, "-hide_banner", "-version"))
-                    .redirectErrorStream(true)
-                    .start();
-            String output;
-            try (var stream = process.getInputStream()) {
-                output = new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            }
-            if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
+            FFmpegProcesses.Result result = FFmpegProcesses.run(
+                    List.of(executable, "-hide_banner", "-version"), PROBE_TIMEOUT_SECONDS);
+            if (result.exitCode() != 0) {
                 return null;
             }
-            if (process.exitValue() != 0) {
-                return null;
-            }
+            String output = result.output();
             String firstLine = output.lines().findFirst().orElse("").trim();
             return firstLine.isEmpty() ? "ffmpeg" : firstLine;
         } catch (IOException e) {

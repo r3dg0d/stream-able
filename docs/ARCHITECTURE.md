@@ -59,6 +59,13 @@ started with `ProcessBuilder`: no shell, and stream keys only ever appear inside
 the list itself. The encode head converts RGBA to BT.709 limited range, stamps the
 frames BT.709 (`setparams`), pins SAR 1:1 and tags the output.
 
+Finite probes and recording/replay muxes use `FFmpegProcesses.run`: the output
+pipe drains on a daemon reader while the caller waits against the process
+deadline. Diagnostics retain at most 64 KiB while excess output is drained.
+Timeout or interruption terminates the owned child and its live descendants.
+Recording audio muxes stop after two minutes and keep the video/WAV source files
+if finalization fails; replay muxes use the same two-minute deadline.
+
 Compatible destinations share one FFmpeg process via the `tee` muxer
 (`onfail=ignore` per slave). `streaming/TeeSlaveAttributor` maps redacted stderr
 error lines onto named destinations so a mid-stream slave drop marks only that

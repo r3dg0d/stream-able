@@ -4,11 +4,9 @@ import dev.streamable.runtime.ManagedRuntime;
 import dev.streamable.runtime.RuntimeContext;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The Stream-able-managed FFmpeg build.
@@ -73,19 +71,12 @@ public final class FFmpegRuntime extends ManagedRuntime {
     @Override
     protected void initialize(Path directory) throws Exception {
         Path executable = executableIn(directory);
-        Process process = FFmpegProcesses.builder(java.util.List.of(executable.toString(), "-hide_banner", "-version"))
-                .redirectErrorStream(true).start();
-        String output;
-        try (var in = process.getInputStream()) {
-            output = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        if (!process.waitFor(20, TimeUnit.SECONDS)) {
-            process.destroyForcibly();
-            throw new IOException("ffmpeg -version did not finish");
-        }
-        if (process.exitValue() != 0) {
+        FFmpegProcesses.Result result = FFmpegProcesses.run(
+                java.util.List.of(executable.toString(), "-hide_banner", "-version"), 20);
+        String output = result.output();
+        if (result.exitCode() != 0) {
             throw new IOException("The downloaded FFmpeg could not run on this system (exit "
-                    + process.exitValue() + "): " + output.lines().findFirst().orElse(""));
+                    + result.exitCode() + "): " + output.lines().findFirst().orElse(""));
         }
         versionLine = output.lines().findFirst().orElse("ffmpeg").trim();
     }

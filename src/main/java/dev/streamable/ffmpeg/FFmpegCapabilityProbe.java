@@ -3,14 +3,12 @@ package dev.streamable.ffmpeg;
 import dev.streamable.StreamAbleLog;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Determines which encoders actually work on this machine.
@@ -247,16 +245,8 @@ public final class FFmpegCapabilityProbe {
             return new RunResult(-1, "");
         }
         try {
-            Process process = FFmpegProcesses.builder(command).redirectErrorStream(true).start();
-            String output;
-            try (var stream = process.getInputStream()) {
-                output = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-            }
-            if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                return new RunResult(-1, "Timed out.");
-            }
-            return new RunResult(process.exitValue(), output);
+            FFmpegProcesses.Result result = FFmpegProcesses.run(command, PROBE_TIMEOUT_SECONDS);
+            return new RunResult(result.exitCode(), result.output());
         } catch (IOException e) {
             return new RunResult(-1, e.getMessage() == null ? "" : e.getMessage());
         } catch (InterruptedException e) {

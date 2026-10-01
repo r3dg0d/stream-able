@@ -1,12 +1,19 @@
 package dev.streamable.ffmpeg;
 
 import java.io.File;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Creates every FFmpeg {@link ProcessBuilder}, so all launches share one
@@ -36,6 +43,52 @@ public final class FFmpegProcesses {
         ProcessBuilder builder = new ProcessBuilder(command);
         applyEnvironment(builder.environment(), osName(), EXTRA_DRIVER_DIRECTORIES);
         return builder;
+    }
+
+    public record Result(int exitCode, String output) { }
+
+    /** Runs a finite command, draining its pipe concurrently with the deadline. */
+    public static Result run(List<String> command, long timeoutSeconds) throws IOException, InterruptedException {
+        Process process = builder(command).redirectErrorStream(true).start();
+        FutureTask<String> output = new FutureTask<>(() -> {
+            try (var in = process.getInputStream()) {
+                ByteArrayOutputStream captured = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = in.read(buffer)) != -1) {
+                    // Keep diagnostics bounded, but continue draining to avoid
+                    // blocking a noisy encoder on a full OS pipe.
+                    int remaining = 64 * 1024 - captured.size();
+                    if (remaining > 0) captured.write(buffer, 0, Math.min(count, remaining));
+                }
+                return captured.toString(StandardCharsets.UTF_8);
+            }
+        });
+        Thread reader = Thread.ofPlatform().daemon(true).name("streamable-ffmpeg-output").start(output);
+        try {
+            process.getOutputStream().close();
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                throw new IOException("FFmpeg process timed out after " + timeoutSeconds + " seconds.");
+            }
+            try {
+                return new Result(process.exitValue(), output.get(1, TimeUnit.SECONDS));
+            } catch (ExecutionException e) {
+                throw new IOException("Could not read FFmpeg output.", e.getCause());
+            } catch (TimeoutException e) {
+                throw new IOException("FFmpeg output did not close after exit.", e);
+            }
+        } finally {
+            if (process.isAlive()) {
+                process.descendants().forEach(ProcessHandle::destroyForcibly);
+                process.destroyForcibly();
+                try {
+                    process.waitFor(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            reader.interrupt();
+        }
     }
 
     /** Pure, testable environment adjustment. */
