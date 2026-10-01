@@ -5,6 +5,9 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Config saves create unique temporary files and restrict permissions before
+  writing credentials. A stale temporary symlink cannot overwrite another file,
+  and failed saves clean up their own partial file.
 - Repair null streaming sections, destination lists/entries and legacy microphone
   noise settings during migration instead of quarantining an otherwise valid
   config and resetting unrelated settings or saved destinations.

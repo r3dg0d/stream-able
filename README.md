@@ -136,7 +136,7 @@ A stream key is a credential.
 - Redacted centrally by `SecretRedactor`, which strips the configured keys *and* anything shaped like one; **Copy diagnostics** passes every line through it
 - Entered in a masked field (show / paste / clear); a masked key cannot be copied out of the field
 - Arguments reach FFmpeg as a process argument array, never through a shell
-- On Linux and macOS the config file is `chmod 600` whenever it contains a key. On Windows it keeps default permissions, because Java cannot set restrictive ACLs portably.
+- Config saves use unique temporary files; on Linux and macOS permissions are restricted before writing keys, and the published config is `chmod 600`. On Windows it keeps default permissions, because Java cannot set restrictive ACLs portably.
 
 ---
 

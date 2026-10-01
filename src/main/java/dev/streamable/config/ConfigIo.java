@@ -249,12 +249,15 @@ public final class ConfigIo {
     /** Writes the config atomically, tightening permissions when it holds secrets. */
     public static void save(Path configDir, StreamAbleConfig config) {
         Path file = configDir.resolve(CONFIG_FILE_NAME);
-        Path temp = configDir.resolve(CONFIG_FILE_NAME + ".tmp");
+        Path temp = null;
         try {
             Files.createDirectories(configDir);
             config.validate();
-            Files.writeString(temp, GSON.toJson(config), StandardCharsets.UTF_8);
+            // A unique, exclusively created file avoids following stale symlinks
+            // and lets overlapping saves publish complete snapshots independently.
+            temp = Files.createTempFile(configDir, CONFIG_FILE_NAME + ".", ".tmp");
             restrictPermissionsIfNeeded(temp, config);
+            Files.writeString(temp, GSON.toJson(config), StandardCharsets.UTF_8);
             try {
                 Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING,
                         StandardCopyOption.ATOMIC_MOVE);
@@ -264,6 +267,14 @@ public final class ConfigIo {
             restrictPermissionsIfNeeded(file, config);
         } catch (IOException e) {
             StreamAbleLog.CORE.error("Failed to save the Stream-able config", e);
+        } finally {
+            if (temp != null) {
+                try {
+                    Files.deleteIfExists(temp);
+                } catch (IOException e) {
+                    StreamAbleLog.CORE.warn("Could not remove the temporary config file", e);
+                }
+            }
         }
     }
 

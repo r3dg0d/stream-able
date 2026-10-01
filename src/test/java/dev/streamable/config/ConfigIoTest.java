@@ -230,6 +230,34 @@ class ConfigIoTest {
     }
 
     @Test
+    void saveDoesNotFollowAStaleTemporarySymlink(@TempDir Path dir) throws IOException {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.getFileStore(dir)
+                .supportsFileAttributeView(java.nio.file.attribute.PosixFileAttributeView.class));
+        Path unrelated = dir.resolve("unrelated.txt");
+        Files.writeString(unrelated, "keep this file");
+        Path stale = dir.resolve(ConfigIo.CONFIG_FILE_NAME + ".tmp");
+        Files.createSymbolicLink(stale, unrelated);
+        StreamAbleConfig config = new StreamAbleConfig();
+        config.recording.fps = 24;
+        ConfigIo.save(dir, config);
+        assertEquals("keep this file", Files.readString(unrelated));
+        assertTrue(Files.isSymbolicLink(stale), "do not consume someone else's temporary path");
+        assertEquals(24, ConfigIo.load(dir).recording.fps);
+    }
+
+    @Test
+    void failedSaveRemovesOnlyItsOwnTemporaryFile(@TempDir Path dir) throws IOException {
+        Path original = dir.resolve(ConfigIo.CONFIG_FILE_NAME);
+        Files.createDirectory(original);
+        Files.writeString(original.resolve("keep.txt"), "keep");
+        ConfigIo.save(dir, new StreamAbleConfig());
+        assertEquals("keep", Files.readString(original.resolve("keep.txt")));
+        try (var entries = Files.list(dir)) {
+            assertEquals(List.of(original), entries.toList(), "failed save must not leave a partial config");
+        }
+    }
+
+    @Test
     void configWithSecretsIsNotWorldReadableOnPosix(@TempDir Path dir) throws IOException {
         StreamAbleConfig config = new StreamAbleConfig();
         StreamingSettings.Destination destination = new StreamingSettings.Destination();
