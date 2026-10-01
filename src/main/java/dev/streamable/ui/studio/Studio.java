@@ -154,7 +154,7 @@ public final class Studio {
         items.add(microphoneStatus());
         if (client.streaming().isLive()) {
             HealthReport report = client.healthReport();
-            items.add(new StatusItem("Network " + report.network().label(), conditionColor(report.network())));
+            items.add(new StatusItem("Output " + report.network().label(), conditionColor(report.network())));
             items.add(new StatusItem(client.health().framesDropped() + " dropped",
                     client.health().framesDropped() > 0 ? Theme.WARNING : Theme.SUCCESS));
         }

@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Isolate multistream destination writes with bounded FFmpeg FIFO packet queues.
+  A stalled ingest no longer blocks the shared encoder and healthy destinations;
+  congested outputs discard packets and resume at a keyframe. Stream Health
+  reports queue overflow episodes and labels its combined diagnosis **Output**
+  rather than inferring internet quality from encoder speed.
 - Kick custom RTMPS targets retain the required `/app` path. An earlier migration
   incorrectly removed it, producing `host/key` rather than `host:443/app/key`.
   Known pathless Kick/IVS endpoints are repaired on load and when building runtime

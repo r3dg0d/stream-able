@@ -43,8 +43,8 @@ Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-ab
 
 ### Streaming and multistreaming
 - RTMP and RTMPS to Twitch, YouTube, X, Kick or any endpoint. If a service gives you a Stream URL and a Stream Key, Stream-able can publish to it.
-- Destinations sharing an encode profile are served by **one encoder** fanned out with FFmpeg's `tee` muxer; a dead ingest cannot take the healthy ones down.
-- Reconnect with backoff, bounded queues and live health: delivered bitrate, encoder FPS and latency, dropped and repeated frames, network condition.
+- Destinations sharing an encode profile are served by **one encoder** fanned out with FFmpeg's FIFO-backed `tee` muxer; bounded packet queues isolate slow ingests. Congested outputs may drop packets and resume at a keyframe; [connection details](docs/NETWORK_RELIABILITY.md).
+- Reconnect with backoff, bounded queues and live health: encoded bitrate when available, encoder FPS and latency, dropped and repeated frames, output condition and destination queue overflow episodes.
 - **Destination test**: for Twitch, a real `?bandwidthtest=true` publish that does not make your channel live. For other services, which offer no known private test mode, Stream-able checks DNS, TCP, TLS and the RTMP handshake, then runs your exact encoder settings locally - and says so plainly.
 
 ### Microphone
@@ -131,7 +131,7 @@ destinations. Twitch, YouTube, X and other custom server paths stay unchanged.
 See [Kick's connection guide](https://help.kick.com/en/articles/14994318-obs-or-streamlabs-not-connecting-to-kick)
 and [Amazon IVS's FFmpeg setup](https://docs.aws.amazon.com/ivs/latest/LowLatencyUserGuide/getting-started-set-up-streaming.html).
 
-A destination only reports **Live** once FFmpeg confirms it is publishing. A stream that has never published is treated as a configuration problem, not a dropped connection, and the Destinations page and Stream Health explain the likely cause.
+A destination reports **Live** once FFmpeg shows encoding progress; shared asynchronous outputs provide only a coarse session indicator, not confirmation of delivery to every ingest. A stream that has never published is treated as a configuration problem, not a dropped connection, and the Destinations page and Stream Health explain the likely cause.
 
 ---
 

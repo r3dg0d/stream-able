@@ -58,6 +58,7 @@ public final class FFmpegProcess implements AutoCloseable {
     private final AtomicBoolean stopping = new AtomicBoolean(false);
     private final AtomicLong framesWritten = new AtomicLong();
     private final AtomicLong framesDropped = new AtomicLong();
+    private final AtomicLong outputCongestionEvents = new AtomicLong();
     /** Frames that could not be queued; written later as repeats so the timeline never shrinks. */
     private final AtomicLong framesOwed = new AtomicLong();
     private final AtomicLong framesRepeatedForTiming = new AtomicLong();
@@ -298,6 +299,10 @@ public final class FFmpegProcess implements AutoCloseable {
                         stderrHistory.removeFirst();
                     }
                 }
+                if (safe.contains("FIFO queue full")) {
+                    outputCongestionEvents.incrementAndGet();
+                    StreamAbleLog.FFMPEG.warn("{}", safe);
+                }
                 if (looksLikeError(safe)) {
                     lastError = safe;
                     hasDiagnostic = true;
@@ -470,6 +475,11 @@ public final class FFmpegProcess implements AutoCloseable {
 
     public int exitCode() {
         return exitCode;
+    }
+
+    /** Overflow episodes, not a packet/frame count or a per-destination measurement. */
+    public long outputCongestionEvents() {
+        return outputCongestionEvents.get();
     }
 
     /** Last error line, already redacted. */

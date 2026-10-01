@@ -32,9 +32,9 @@ final class HealthPage {
                 ? "LIVE " + client.health().formattedUptime() : "Offline",
                 () -> client.streaming().isLive() ? Theme.LIVE : Theme.TEXT_MUTED,
                 () -> client.streaming().isLive() ? client.health().liveDestinationCount() + " destination(s) live" : null));
-        top.add(new Widgets.MetricCard("Network", () -> client.healthReport().network().label(),
+        top.add(new Widgets.MetricCard("Output", () -> client.healthReport().network().label(),
                 () -> Studio.conditionColor(client.healthReport().network()),
-                () -> client.streaming().isLive() ? "from delivered bitrate and encoder queue" : "while live"));
+                () -> client.streaming().isLive() ? "encoder throughput, queue and destination state" : "while live"));
         top.add(new Widgets.MetricCard("Recording", () -> client.recording().isActive()
                 ? Studio.clock(client.recording().elapsedMillis()) : "Off",
                 () -> client.recording().isActive() ? Theme.RECORDING : Theme.TEXT_MUTED,

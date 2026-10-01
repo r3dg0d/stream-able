@@ -385,6 +385,7 @@ public final class StreamController {
         long submitted = 0;
         long dropped = 0;
         long repeated = 0;
+        long congestionEvents = 0;
         double pressure = 0;
         double outputKbps = 0;
         boolean anyRate = false;
@@ -399,6 +400,7 @@ public final class StreamController {
             dev.streamable.ffmpeg.FFmpegProcess process = group.process();
             if (process != null) {
                 repeated += process.framesRepeatedForTiming();
+                congestionEvents += process.outputCongestionEvents();
                 if (process.outputKbps() >= 0) {
                     outputKbps += process.outputKbps();
                     anyRate = true;
@@ -435,6 +437,6 @@ public final class StreamController {
                 repeated,
                 totalReconnects,
                 profile == null ? 0 : profile.audio().bitrateKbps(),
-                profile == null ? "" : profile.video().width() + "x" + profile.video().height());
+                profile == null ? "" : profile.video().width() + "x" + profile.video().height(), congestionEvents);
     }
 }

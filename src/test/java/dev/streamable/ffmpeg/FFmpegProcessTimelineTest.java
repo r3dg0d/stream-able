@@ -22,6 +22,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FFmpegProcessTimelineTest {
 
     @Test
+    void packetQueueOverflowIsCountedWithoutBecomingFatal() throws Exception {
+        String sh = Files.isExecutable(Path.of("/bin/sh")) ? "/bin/sh" : "/run/current-system/sw/bin/sh";
+        Assumptions.assumeTrue(Files.isExecutable(Path.of(sh)));
+        FFmpegProcess process = new FFmpegProcess(List.of(sh, "-c",
+                "printf '[fifo @ test] FIFO queue full\\n[fifo @ test] FIFO queue full\\n' >&2; cat >/dev/null"), 2);
+        java.util.concurrent.atomic.AtomicInteger errors = new java.util.concurrent.atomic.AtomicInteger();
+        process.setOnErrorLine(line -> errors.incrementAndGet());
+        try {
+            process.start();
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+            while (process.outputCongestionEvents() < 2 && System.nanoTime() < deadline) Thread.sleep(10);
+            assertEquals(2, process.outputCongestionEvents());
+            assertEquals(0, errors.get(), "overflow must not trigger destination split/reconnect");
+        } finally {
+            process.stop();
+        }
+    }
+
+    @Test
     void droppedPicturesStillCountTowardsTheTimeline() throws Exception {
         Assumptions.assumeTrue(Files.isExecutable(Path.of("/bin/sh")) || Files.isExecutable(Path.of("/run/current-system/sw/bin/sh")));
         Path out = Files.createTempFile("timeline", ".raw");

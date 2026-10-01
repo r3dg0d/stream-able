@@ -295,6 +295,13 @@ public final class FFmpegCommandBuilder {
         } else {
             args.add("-f");
             args.add("tee");
+            // A stalled socket must not hold the shared encoder (and every other
+            // destination) hostage. Bound encoded packets, not raw capture frames;
+            // resume at a keyframe after overflow so decoding can recover.
+            args.add("-use_fifo");
+            args.add("1");
+            args.add("-fifo_options");
+            args.add("queue_size=120:drop_pkts_on_overflow=1:restart_with_keyframe=1");
             args.add(buildTeeTarget(publishUrls));
         }
         return List.copyOf(args);

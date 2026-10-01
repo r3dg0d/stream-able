@@ -37,7 +37,20 @@ public record StreamHealth(
         long framesRepeatedForTiming,
         int reconnects,
         int audioBitrateKbps,
-        String outputResolution) {
+        String outputResolution,
+        long outputCongestionEvents) {
+
+    public StreamHealth(boolean live, long uptimeMillis, int videoBitrateKbps, int fps,
+                        long framesSubmitted, long framesDropped, double queuePressure,
+                        String encoderName, List<DestinationStatus> destinations, double outputKbps,
+                        double encodeFps, double encodeLatencyMillis, double encodeSpeed,
+                        long framesRepeatedForTiming, int reconnects, int audioBitrateKbps,
+                        String outputResolution) {
+        this(live, uptimeMillis, videoBitrateKbps, fps, framesSubmitted, framesDropped,
+                queuePressure, encoderName, destinations, outputKbps, encodeFps,
+                encodeLatencyMillis, encodeSpeed, framesRepeatedForTiming, reconnects,
+                audioBitrateKbps, outputResolution, 0);
+    }
 
     public static final StreamHealth OFFLINE = new StreamHealth(
             false, 0, 0, 0, 0, 0, 0, "", List.of(), -1, -1, -1, -1, 0, 0, 0, "");

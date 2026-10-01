@@ -15,6 +15,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HealthReportTest {
 
+    @Test
+    void destinationOverflowRemainsVisibleWithHealthyEncoder() {
+        StreamHealth h = live(-1, 60, 1, 0, 0);
+        StreamHealth congested = new StreamHealth(h.live(), h.uptimeMillis(), h.videoBitrateKbps(),
+                h.fps(), h.framesSubmitted(), h.framesDropped(), h.queuePressure(), h.encoderName(),
+                h.destinations(), h.outputKbps(), h.encodeFps(), h.encodeLatencyMillis(), h.encodeSpeed(),
+                h.framesRepeatedForTiming(), h.reconnects(), h.audioBitrateKbps(), h.outputResolution(), 2);
+        HealthReport r = report(congested, Long.MAX_VALUE, false);
+        assertEquals(HealthReport.Condition.FAIR, r.network());
+        assertTrue(r.findings().stream().anyMatch(f -> f.message().startsWith("A destination queue overflowed")));
+    }
+
     private static StreamHealth live(double outKbps, double encodeFps, double speed, double queue, int reconnects) {
         return live(outKbps, encodeFps, speed, queue, reconnects,
                 List.of(new StreamHealth.DestinationStatus("Twitch", DestinationState.LIVE, "")));
@@ -67,15 +79,15 @@ class HealthReportTest {
     @Test
     void slowEncoderIsNamed() {
         HealthReport report = report(live(6000, 41, 0.7, 0.9, 0), -1, false);
-        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Encoder cannot maintain 60 FPS")));
+        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Output cannot maintain 60 FPS")));
         assertEquals(HealthReport.Condition.POOR, report.network());
     }
 
     @Test
     void lowUploadIsNamed() {
         HealthReport report = report(live(3000, 60, 1.0, 0.6, 1), -1, false);
-        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Upload bandwidth is below")));
-        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Network queue is repeatedly filling")));
+        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Encoded output is below")));
+        assertTrue(report.findings().stream().anyMatch(f -> f.message().startsWith("Encoder input queue is filling")));
     }
 
     @Test

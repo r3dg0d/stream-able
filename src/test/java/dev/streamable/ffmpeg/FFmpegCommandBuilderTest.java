@@ -38,6 +38,7 @@ class FFmpegCommandBuilderTest {
         assertEquals("flv", args.get(n - 2));
         assertEquals("rtmp://host/app/KEY", args.get(n - 1));
         assertFalse(args.contains("tee"), "single destination must not use the tee muxer");
+        assertFalse(args.contains("-use_fifo"));
     }
 
     @Test
@@ -50,6 +51,16 @@ class FFmpegCommandBuilderTest {
         assertTrue(target.contains("rtmps://b/app/K2"));
         assertTrue(target.contains("rtmp://c/app/K3"));
         assertEquals(3, target.split("\\|").length);
+    }
+
+    @Test
+    void multistreamUsesBoundedIndependentPacketQueues() {
+        List<String> args = FFmpegCommandBuilder.buildStreamCommand(FFMPEG, liveProfile(), 1920, 1080,
+                List.of("rtmp://a/app/K1", "rtmps://b/app/K2"), 5000, 0);
+        assertEquals("1", valueAfter(args, "-use_fifo"));
+        assertEquals("queue_size=120:drop_pkts_on_overflow=1:restart_with_keyframe=1",
+                valueAfter(args, "-fifo_options"));
+        assertTrue(args.indexOf("-fifo_options") < args.size() - 1);
     }
 
     @Test

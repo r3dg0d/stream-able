@@ -132,7 +132,7 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             Severity bitrateSeverity = stream.outputKbps() > 0 && stream.outputKbps() < target * 0.85
                     ? Severity.WARNING : Severity.OK;
             metrics.add(new Metric("Stream", "Output bitrate", kbps(stream.outputKbps()) + " (target " + target + " kbps)",
-                    "What FFmpeg is actually sending, all destinations combined per encoder.", bitrateSeverity));
+                    "Encoded output measured by FFmpeg; unavailable for tee. This is not a socket bandwidth measurement.", bitrateSeverity));
             metrics.add(new Metric("Stream", "Audio bitrate", stream.audioBitrateKbps() + " kbps", "Program audio.", Severity.OK));
             Severity queue = stream.queuePressure() >= 0.8 ? Severity.CRITICAL
                     : stream.queuePressure() >= 0.4 ? Severity.WARNING : Severity.OK;
@@ -146,17 +146,27 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
 
             if (encodeSeverity == Severity.CRITICAL) {
                 findings.add(new Finding(Severity.CRITICAL, String.format(Locale.ROOT,
-                        "Encoder cannot maintain %d FPS (%.1f). Use a hardware encoder, a faster preset or a lower "
+                        "Output cannot maintain %d FPS (%.1f). Check encoder load and destination stalls; try a faster preset or lower "
                                 + "resolution.", stream.fps(), stream.encodeFps())));
             }
             boolean falling = stream.encodeSpeed() > 0 && stream.encodeSpeed() < 0.97;
             if (bitrateSeverity == Severity.WARNING && encodeSeverity == Severity.OK) {
-                findings.add(new Finding(Severity.WARNING, "Upload bandwidth is below the configured bitrate: "
-                        + kbps(stream.outputKbps()) + " of " + target + " kbps is getting out."));
+                findings.add(new Finding(Severity.WARNING, "Encoded output is below the configured bitrate: "
+                        + kbps(stream.outputKbps()) + " of " + target + " kbps is reported. Check destination health and encoder load."));
             }
             if (queue != Severity.OK) {
-                findings.add(new Finding(queue, "Network queue is repeatedly filling: the connection or encoder "
+                findings.add(new Finding(queue, "Encoder input queue is filling: the connection or encoder "
                         + "cannot keep up with " + target + " kbps."));
+            }
+
+            metrics.add(new Metric("Stream", "Destination queue overflows",
+                    Long.toString(stream.outputCongestionEvents()),
+                    "Congestion episodes this encoder run, not dropped-frame counts. Slow outputs resume at a keyframe.",
+                    stream.outputCongestionEvents() > 0 ? Severity.WARNING : Severity.OK));
+            if (stream.outputCongestionEvents() > 0) {
+                findings.add(new Finding(Severity.WARNING,
+                        "A destination queue overflowed. Packets were discarded to keep other outputs moving; "
+                                + "reduce bitrate or disable a slow destination if this repeats."));
             }
 
             int errorCount = 0;
@@ -189,7 +199,7 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
 
             network = bitrateSeverity == Severity.WARNING || queue == Severity.CRITICAL || falling
                     || errorCount > 0 ? Condition.POOR
-                    : queue == Severity.WARNING || stream.reconnects() > 0 || reconnectingCount > 0
+                    : queue == Severity.WARNING || stream.outputCongestionEvents() > 0 || stream.reconnects() > 0 || reconnectingCount > 0
                     ? Condition.FAIR : Condition.GOOD;
             if (stream.liveDestinationCount() == 0) {
                 network = errorCount > 0 ? Condition.POOR : Condition.FAIR;
