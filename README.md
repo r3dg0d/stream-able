@@ -232,7 +232,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 ## Verification status
 
-What has been checked, and how (Stream-able **1.4.1** on Minecraft **26.1.2**, **26.2** and **26.3**):
+What has been checked, and how (Stream-able **1.4.2** on Minecraft **26.1.2**, **26.2** and **26.3**):
 
 - **Unit and integration tests** (`./gradlew test`): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, parsing of browser audio chunks, the disk-space
   guardian thresholds and shared recording ETA (`secondsRemaining`), Stream
@@ -253,6 +253,7 @@ What has been checked, and how (Stream-able **1.4.1** on Minecraft **26.1.2**, *
 - **CI on Windows**: unit/integration tests and jar build run on `windows-latest` (Temurin 25). A live Windows Minecraft client session is still unverified — see [`docs/WINDOWS.md`](docs/WINDOWS.md) and [#3](https://github.com/r3dg0d/stream-able/issues/3) for the smoke checklist and platform quirks.
 - **Ingest reachability (handshake only, 2026-09-29 PT, no stream keys / no publish)**: default Twitch RTMP (`live.twitch.tv`), YouTube RTMPS (`a.rtmps.youtube.com`) and plain RTMP fallback (`a.rtmp.youtube.com`), and X RTMPS (`va.pscp.tv`) completed DNS → TCP → (TLS) → RTMP handshake from this machine. Optional regression: `STREAMABLE_LIVE_INGEST=1 ./gradlew test --tests '*LiveIngestReachabilityTest*'`.
 - **User-reported live publishing (2026-09-30, Minecraft 26.2)**: streaming to X, Twitch and YouTube succeeded. Kick failed with a pathless IVS URL; the `/app` migration and runtime URL handling are corrected and regression-tested, but a live Kick retry has not yet been verified.
+- **User-reported stream continuity (2026-10-01, Minecraft 26.2)**: after budgeting all four destination copies against measured upload capacity, the user confirms the stream works without the reported missing sections. A controlled four-receiver regression also checks every delivered video frame and contiguous audio; this does not establish hours-long stability.
 - **Not verified on real services or hardware**: hours-long publishing, reconnect under real ingest drops and multistream tee reporting — see [#2](https://github.com/r3dg0d/stream-able/issues/2). Also unverified: a live Windows game client, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
 
 ---

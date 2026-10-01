@@ -4,6 +4,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.4.2 - 2026-10-01
+
+Upload-budget and stream continuity fix for Minecraft 26.1.2, 26.2 and 26.3 (Fabric).
+
 ### Fixed
 - Budget all destination copies against a measured upload speed, reserving 20%
   for overhead and other traffic. Profiles are capped for each session without
