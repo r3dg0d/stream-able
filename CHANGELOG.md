@@ -4,6 +4,13 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Fixed
+- Budget all destination copies against a measured upload speed, reserving 20%
+  for overhead and other traffic. Profiles are capped for each session without
+  changing saved bitrate preferences. This prevents sustained FIFO packet loss
+  when multistream upload demand exceeds upstream capacity; Stream Health now
+  reports the planned total upload and marks lost stream sections as poor output.
+
 ## 1.4.1 - 2026-10-01
 
 Reliability update for Minecraft 26.1.2, 26.2 and 26.3 (Fabric).

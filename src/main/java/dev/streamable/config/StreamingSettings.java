@@ -65,6 +65,9 @@ public final class StreamingSettings {
     /** Bounded frame queue depth before frames start being dropped. */
     public int frameQueueCapacity = 90;
 
+    /** Measured upstream capacity; zero means unknown. 20% is reserved at session start. */
+    public double uploadSpeedMbps = 0;
+
     public ReconnectPolicy reconnectPolicy() {
         return new ReconnectPolicy(reconnect, reconnectDelayMs, maxReconnectDelayMs, 2.0, maxReconnectAttempts);
     }
@@ -98,6 +101,7 @@ public final class StreamingSettings {
         reconnectDelayMs = Math.clamp(reconnectDelayMs, 250, 300_000);
         maxReconnectDelayMs = Math.clamp(maxReconnectDelayMs, reconnectDelayMs, 900_000);
         frameQueueCapacity = Math.clamp(frameQueueCapacity, 8, 600);
+        uploadSpeedMbps = Double.isFinite(uploadSpeedMbps) ? Math.clamp(uploadSpeedMbps, 0, 10000) : 0;
         if (audioCodec == null) {
             audioCodec = AudioCodec.AAC;
         }

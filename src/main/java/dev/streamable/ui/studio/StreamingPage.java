@@ -56,6 +56,14 @@ final class StreamingPage {
         video.add(new Label(() -> client.streaming().bandwidthEstimate(st).describe())
                 .color(Theme.TEXT_SECONDARY).scale(Theme.TEXT_CAPTION).wrap());
 
+        video.add(s.doubleField("Measured upload speed (Mbps; 0 = unknown)", () -> st.uploadSpeedMbps,
+                v -> st.uploadSpeedMbps = v, 0, 10000)
+                .tooltip("Enter upload, not download. All destinations share 80% of it; settings apply next stream."));
+        video.add(new Label(() -> {
+            try { return client.streaming().uploadBudget(st).describe(); }
+            catch (IllegalArgumentException e) { return e.getMessage(); }
+        }).color(Theme.TEXT_SECONDARY).scale(Theme.TEXT_CAPTION).wrap());
+
         Widgets.Card audio = page.add(new Widgets.Card(Theme.SPACE_5));
         audio.add(new Widgets.SectionHeader("Audio", () -> "Sources are chosen on the Recording and Audio pages."));
         List<AudioCodec> codecs = Arrays.stream(AudioCodec.values()).filter(AudioCodec::isStreamSafe).toList();

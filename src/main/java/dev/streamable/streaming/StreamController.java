@@ -147,6 +147,13 @@ public final class StreamController {
                 lastError = "No destination passed validation.";
                 return lastError;
             }
+            UploadBudget.Plan budget = UploadBudget.plan(planned, settings.uploadSpeedMbps, withAudio);
+            planned = budget.groups();
+            // Health must show the effective profile, not the requested bitrate.
+            activeProfile = planned.getFirst().profile();
+            if (budget.reduced()) {
+                StreamAbleLog.STREAMING.info("{}", budget.describe());
+            }
             if (DestinationGrouping.requiresMultipleEncoders(planned)) {
                 multipleEncodersWarned = true;
                 StreamAbleLog.STREAMING.warn(
@@ -366,15 +373,20 @@ public final class StreamController {
 
     /** Estimated upload requirement for the current plan. */
     public BandwidthEstimator.Estimate bandwidthEstimate(StreamingSettings settings) {
-        EncodeProfile profile = activeProfile != null
-                ? activeProfile
-                : settings.encodeProfile(activeEncoder);
+        EncodeProfile profile = state == State.LIVE && activeProfile != null
+                ? activeProfile : settings.encodeProfile(activeEncoder);
         List<DestinationGrouping.Group> planned = groups.isEmpty()
                 ? DestinationGrouping.group(destinations, profile)
                 : groups.stream().map(StreamEncoderGroup::group).toList();
         return BandwidthEstimator.estimate(planned.stream()
                 .map(g -> new BandwidthEstimator.GroupLoad(g.profile(), g.destinations().size()))
                 .toList());
+    }
+
+    /** Preview uses requested profiles so editing speed/destinations updates the next-session plan. */
+    public UploadBudget.Plan uploadBudget(StreamingSettings settings) {
+        return UploadBudget.plan(DestinationGrouping.group(destinations, settings.encodeProfile(activeEncoder)),
+                settings.uploadSpeedMbps, true);
     }
 
     /** Consistent snapshot for the HUD and Studio screen. */
@@ -386,6 +398,7 @@ public final class StreamController {
         long dropped = 0;
         long repeated = 0;
         long congestionEvents = 0;
+        long plannedUpload = 0;
         double pressure = 0;
         double outputKbps = 0;
         boolean anyRate = false;
@@ -394,6 +407,8 @@ public final class StreamController {
         double speed = -1;
         List<StreamHealth.DestinationStatus> statuses = new ArrayList<>();
         for (StreamEncoderGroup group : groups) {
+            plannedUpload += (Math.max(group.profile().video().bitrateKbps(), group.profile().video().maxBitrateKbps())
+                    + (audioEnabled ? group.profile().audio().bitrateKbps() : 0L)) * group.destinations().size();
             submitted += group.framesSubmitted();
             dropped += group.framesDropped();
             pressure = Math.max(pressure, group.queuePressure());
@@ -437,6 +452,6 @@ public final class StreamController {
                 repeated,
                 totalReconnects,
                 profile == null ? 0 : profile.audio().bitrateKbps(),
-                profile == null ? "" : profile.video().width() + "x" + profile.video().height(), congestionEvents);
+                profile == null ? "" : profile.video().width() + "x" + profile.video().height(), congestionEvents, plannedUpload);
     }
 }

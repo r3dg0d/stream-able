@@ -45,6 +45,7 @@ Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-ab
 - RTMP and RTMPS to Twitch, YouTube, X, Kick or any endpoint. If a service gives you a Stream URL and a Stream Key, Stream-able can publish to it.
 - Destinations sharing an encode profile are served by **one encoder** fanned out with FFmpeg's FIFO-backed `tee` muxer; bounded packet queues isolate slow ingests. Congested outputs may drop packets and resume at a keyframe; [connection details](docs/NETWORK_RELIABILITY.md).
 - Reconnect with backoff, bounded queues and live health: encoded bitrate when available, encoder FPS and latency, dropped and repeated frames, output condition and destination queue overflow episodes.
+- **Upload budget:** enter measured upload Mbps on Streaming to share 80% across all destinations, including audio and VBR ceilings. Bitrate preferences are retained; caps apply at the next start. Stream Health shows planned total upload.
 - **Destination test**: for Twitch, a real `?bandwidthtest=true` publish that does not make your channel live. For other services, which offer no known private test mode, Stream-able checks DNS, TCP, TLS and the RTMP handshake, then runs your exact encoder settings locally - and says so plainly.
 
 ### Microphone

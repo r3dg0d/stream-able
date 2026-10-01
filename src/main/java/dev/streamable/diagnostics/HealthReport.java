@@ -133,6 +133,10 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
                     ? Severity.WARNING : Severity.OK;
             metrics.add(new Metric("Stream", "Output bitrate", kbps(stream.outputKbps()) + " (target " + target + " kbps)",
                     "Encoded output measured by FFmpeg; unavailable for tee. This is not a socket bandwidth measurement.", bitrateSeverity));
+            if (stream.plannedUploadKbps() > 0) {
+                metrics.add(new Metric("Stream", "Planned total upload", stream.plannedUploadKbps() + " kbps",
+                        "Configured video ceilings and audio across all destination copies; excludes protocol overhead.", Severity.OK));
+            }
             metrics.add(new Metric("Stream", "Audio bitrate", stream.audioBitrateKbps() + " kbps", "Program audio.", Severity.OK));
             Severity queue = stream.queuePressure() >= 0.8 ? Severity.CRITICAL
                     : stream.queuePressure() >= 0.4 ? Severity.WARNING : Severity.OK;
@@ -162,11 +166,11 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             metrics.add(new Metric("Stream", "Destination queue overflows",
                     Long.toString(stream.outputCongestionEvents()),
                     "Congestion episodes this encoder run, not dropped-frame counts. Slow outputs resume at a keyframe.",
-                    stream.outputCongestionEvents() > 0 ? Severity.WARNING : Severity.OK));
+                    stream.outputCongestionEvents() > 0 ? Severity.CRITICAL : Severity.OK));
             if (stream.outputCongestionEvents() > 0) {
-                findings.add(new Finding(Severity.WARNING,
-                        "A destination queue overflowed. Packets were discarded to keep other outputs moving; "
-                                + "reduce bitrate or disable a slow destination if this repeats."));
+                findings.add(new Finding(Severity.CRITICAL,
+                        "A destination queue overflowed. Stream sections were dropped; lower the total upload requirement "
+                                + "using measured upload speed on Streaming, or disable destinations."));
             }
 
             int errorCount = 0;
@@ -198,8 +202,8 @@ public record HealthReport(List<Metric> metrics, List<Finding> findings, Conditi
             }
 
             network = bitrateSeverity == Severity.WARNING || queue == Severity.CRITICAL || falling
-                    || errorCount > 0 ? Condition.POOR
-                    : queue == Severity.WARNING || stream.outputCongestionEvents() > 0 || stream.reconnects() > 0 || reconnectingCount > 0
+                    || errorCount > 0 || stream.outputCongestionEvents() > 0 ? Condition.POOR
+                    : queue == Severity.WARNING || stream.reconnects() > 0 || reconnectingCount > 0
                     ? Condition.FAIR : Condition.GOOD;
             if (stream.liveDestinationCount() == 0) {
                 network = errorCount > 0 ? Condition.POOR : Condition.FAIR;

@@ -23,6 +23,22 @@ Single-destination output still uses direct FLV. This change isolates shared
 outputs; it does not remedy an overloaded GPU, insufficient upstream capacity,
 or a single stalled connection. It does not change saved profiles or keys.
 
+## Fit the session to measured upload
+
+Streaming → Measured upload speed accepts Mbps (zero means unknown). At the
+next start, all enabled destination copies—including overridden profiles and
+VBR ceilings—share 80% of that speed. Audio is reserved before reducing video;
+requested bitrate preferences are retained. Removing destinations allows their
+bandwidth to be used by the remaining outputs at the next start. A budget below
+minimum audio/video requirements is rejected before any encoder starts.
+
+For example, four outputs requesting 8,000 kbps video plus 160 kbps audio need
+32.64 Mbps. A 22.47 Mbps uplink limits combined output to 17.976 Mbps and caps
+video at 4,334 kbps per destination. This reserves headroom; it is not live
+network measurement or dynamic encoder reconfiguration. Enter a conservative
+sustained upload speed if speed varies. FIFO remains the bounded last resort,
+and cannot preserve all content once delivery capacity falls below output.
+
 ## Reading Stream Health
 
 The status card is now **Output**, because encoder FPS, input queue fullness and
@@ -32,8 +48,8 @@ not zero throughput. Encoding progress also cannot prove that each asynchronous
 destination has accepted every packet: Live is a coarse session indicator.
 
 **Destination queue overflows** counts congestion episodes in the current
-encoder process, not dropped frames or packets. A warning remains visible after
-an overflow; reconnecting a process resets its counter. Failures with an ingest
+encoder process, not dropped frames or packets. A poor-output finding remains visible after
+an overflow because stream sections were discarded; reconnecting a process resets its counter. Failures with an ingest
 URL still appear on that destination's row.
 
 Every destination requires upload bandwidth even when it shares an encoder.

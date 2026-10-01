@@ -23,7 +23,7 @@ class HealthReportTest {
                 h.destinations(), h.outputKbps(), h.encodeFps(), h.encodeLatencyMillis(), h.encodeSpeed(),
                 h.framesRepeatedForTiming(), h.reconnects(), h.audioBitrateKbps(), h.outputResolution(), 2);
         HealthReport r = report(congested, Long.MAX_VALUE, false);
-        assertEquals(HealthReport.Condition.FAIR, r.network());
+        assertEquals(HealthReport.Condition.POOR, r.network());
         assertTrue(r.findings().stream().anyMatch(f -> f.message().startsWith("A destination queue overflowed")));
     }
 
