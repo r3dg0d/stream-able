@@ -48,14 +48,39 @@ class StreamingCredentialsTest {
 
     @Test
     void acceptsIngestUrlsWithNoApplicationPath() {
-        // Kick publishes through Amazon IVS to rtmps://<host>/<key> with no
-        // application path. An earlier version rejected this as malformed,
-        // which broke a configuration that demonstrably works.
-        assertNull(new StreamingCredentials(
-                "rtmps://fa723fc1b171.global-contribute.live-video.net", "k").validate(true));
-        assertEquals("rtmps://fa723fc1b171.global-contribute.live-video.net/k",
-                new StreamingCredentials(
-                        "rtmps://fa723fc1b171.global-contribute.live-video.net/", "k").publishUrl());
+        // Pathless custom servers remain supported; known Kick hosts are
+        // normalized separately because their FFmpeg endpoint needs /app.
+        assertNull(new StreamingCredentials("rtmps://custom.example.org", "k").validate(true));
+        assertEquals("rtmps://custom.example.org/k",
+                new StreamingCredentials("rtmps://custom.example.org/", "k").publishUrl());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "rtmps://fa723fc1b171.global-contribute.live-video.net",
+            "rtmps://fa723fc1b171.global-contribute.live-video.net/",
+            "rtmps://fa723fc1b171.global-contribute.live-video.net/app",
+            "rtmps://fa723fc1b171.global-contribute.live-video.net:443/app/",
+            "rtmp://fa723fc1b171.global-contribute.live-video.net:1935"
+    })
+    void kickTargetsUseTlsAndTheRequiredApplicationPath(String input) {
+        StreamingCredentials credentials = new StreamingCredentials(input, "fixture_key");
+        assertEquals("rtmps://fa723fc1b171.global-contribute.live-video.net:443/app/fixture_key",
+                credentials.publishUrl());
+        assertFalse(credentials.redactedPublishUrl().contains("fixture_key"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "rtmp://live.twitch.tv/app", "rtmps://a.rtmps.youtube.com/live2",
+            "rtmps://va.pscp.tv:443/x", "rtmp://localhost/custom",
+            "rtmps://live-video.net.example.org/app",
+            "rtmps://example.org/live-video.net/app",
+            "rtmps://abc.global-contribute.live-video.net/custom",
+            "rtmps://abc.global-contribute.live-video.net/app?token=fixture"
+    })
+    void otherServicesAndExplicitCustomPathsAreUnchanged(String input) {
+        assertEquals(input, new StreamingCredentials(input, "fixture_key").ingestUrl());
     }
 
     @Test

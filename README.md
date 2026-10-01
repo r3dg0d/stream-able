@@ -124,6 +124,13 @@ Each destination has a name, service, enabled flag, Server URL, Stream Key and c
 
 **Kick has no preset, deliberately.** Its Amazon IVS ingest host is per-account. Use **Custom RTMP/RTMPS** with the exact URL from your Kick dashboard.
 
+For Kick's `*.global-contribute.live-video.net` hosts, the FFmpeg server URL is
+`rtmps://<your-ingest-host>:443/app`; enter the stream key separately. Stream-able
+repairs known pathless Kick endpoints and preserves `/app` when loading saved
+destinations. Twitch, YouTube, X and other custom server paths stay unchanged.
+See [Kick's connection guide](https://help.kick.com/en/articles/14994318-obs-or-streamlabs-not-connecting-to-kick)
+and [Amazon IVS's FFmpeg setup](https://docs.aws.amazon.com/ivs/latest/LowLatencyUserGuide/getting-started-set-up-streaming.html).
+
 A destination only reports **Live** once FFmpeg confirms it is publishing. A stream that has never published is treated as a configuration problem, not a dropped connection, and the Destinations page and Stream Health explain the likely cause.
 
 ---
@@ -244,7 +251,8 @@ What has been checked, and how (Stream-able **1.4.0** on Minecraft **26.1.2**, *
 - **Not verified at runtime**: automatic clip triggers in a real session (the trigger logic is unit-tested), a browser source's "Recording & stream only" mode being silent on speakers (the test display had no audio device), browser audio on a live stream rather than a recording.
 - **CI on Windows**: unit/integration tests and jar build run on `windows-latest` (Temurin 25). A live Windows Minecraft client session is still unverified — see [`docs/WINDOWS.md`](docs/WINDOWS.md) and [#3](https://github.com/r3dg0d/stream-able/issues/3) for the smoke checklist and platform quirks.
 - **Ingest reachability (handshake only, 2026-09-29 PT, no stream keys / no publish)**: default Twitch RTMP (`live.twitch.tv`), YouTube RTMPS (`a.rtmps.youtube.com`) and plain RTMP fallback (`a.rtmp.youtube.com`), and X RTMPS (`va.pscp.tv`) completed DNS → TCP → (TLS) → RTMP handshake from this machine. Optional regression: `STREAMABLE_LIVE_INGEST=1 ./gradlew test --tests '*LiveIngestReachabilityTest*'`.
-- **Not verified on real services or hardware**: **going live** on Twitch/YouTube/X (Stream Health, hours-long permanence, reconnect under real ingest drops, multistream tee reporting) — see [#2](https://github.com/r3dg0d/stream-able/issues/2). Also unverified: a live Windows game client, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
+- **User-reported live publishing (2026-09-30, Minecraft 26.2)**: streaming to X, Twitch and YouTube succeeded. Kick failed with a pathless IVS URL; the `/app` migration and runtime URL handling are corrected and regression-tested, but a live Kick retry has not yet been verified.
+- **Not verified on real services or hardware**: hours-long publishing, reconnect under real ingest drops and multistream tee reporting — see [#2](https://github.com/r3dg0d/stream-able/issues/2). Also unverified: a live Windows game client, AMD/Intel encoders, 32:9 at 5120x1440 in a real game session, high-refresh pacing on a real GPU display, and hours-long recordings.
 
 ---
 

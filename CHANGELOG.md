@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Kick custom RTMPS targets retain the required `/app` path. An earlier migration
+  incorrectly removed it, producing `host/key` rather than `host:443/app/key`.
+  Known pathless Kick/IVS endpoints are repaired on load and when building runtime
+  credentials; standard ports use RTMPS/443. Other services and explicit custom
+  paths remain unchanged. Saved keys are preserved.
 - FFmpeg probe and mux deadlines now cover output collection. Silent or stuck
   binaries cannot block before the timeout check; output is drained concurrently
   with bounded diagnostic memory, and interruption terminates the owned process.

@@ -181,8 +181,8 @@ class ConfigIoTest {
     }
 
     @Test
-    void repairsTheBadKickIngestUrlFromAnEarlierBuild(@TempDir Path dir) throws IOException {
-        // An earlier preset appended /app, which makes Kick's handshake fail.
+    void preservesTheRequiredKickApplicationPath(@TempDir Path dir) throws IOException {
+        // Older migration incorrectly removed /app; FFmpeg needs to preserve it.
         String json = """
                 {
                   "schemaVersion": 1,
@@ -198,10 +198,27 @@ class ConfigIoTest {
         Files.writeString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), json, StandardCharsets.UTF_8);
 
         StreamAbleConfig config = ConfigIo.load(dir);
-        assertEquals("rtmps://abc123.global-contribute.live-video.net",
+        assertEquals("rtmps://abc123.global-contribute.live-video.net:443/app",
                 config.streaming.destinations.getFirst().ingestUrl);
         assertEquals("rtmp://my.server/app", config.streaming.destinations.get(1).ingestUrl,
                 "a deliberate custom /app path must not be touched");
+    }
+
+    @Test
+    void kickLoadRepairsPathlessSavedUrlsAndPreservesCorrectOnes(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(ConfigIo.CONFIG_FILE_NAME), """
+                {"schemaVersion": 2, "streaming": {"destinations": [
+                 {"name":"Kick", "ingestUrl":"rtmps://abc.global-contribute.live-video.net:443/app", "streamKey":"fixture_key"},
+                 {"name":"Kick old", "ingestUrl":"rtmps://abc.global-contribute.live-video.net", "streamKey":"fixture_key"},
+                 {"name":"Custom", "ingestUrl":"rtmps://example.org/live-video.net/app", "streamKey":"fixture_key"}
+                ]}}
+                """);
+        StreamAbleConfig loaded = ConfigIo.load(dir);
+        assertEquals("rtmps://abc.global-contribute.live-video.net:443/app", loaded.streaming.destinations.get(0).ingestUrl);
+        assertEquals("rtmps://abc.global-contribute.live-video.net:443/app", loaded.streaming.destinations.get(1).ingestUrl);
+        assertEquals("rtmps://example.org/live-video.net/app", loaded.streaming.destinations.get(2).ingestUrl);
+        ConfigIo.save(dir, loaded);
+        assertEquals("fixture_key", ConfigIo.load(dir).streaming.destinations.getFirst().streamKey);
     }
 
     @Test
@@ -226,7 +243,7 @@ class ConfigIoTest {
         assertEquals(StreamPlatform.CUSTOM, kick.platform);
         assertEquals("Kick", kick.name, "the user's label is kept");
         assertEquals("sk_test", kick.streamKey, "credentials must not be lost");
-        assertEquals("rtmps://abc123.global-contribute.live-video.net/", kick.ingestUrl);
+        assertEquals("rtmps://abc123.global-contribute.live-video.net:443/app", kick.ingestUrl);
     }
 
     @Test

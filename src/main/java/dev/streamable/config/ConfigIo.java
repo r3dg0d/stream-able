@@ -72,39 +72,19 @@ public final class ConfigIo {
         }
     }
 
-    /**
-     * Repairs Amazon IVS ingest URLs written by an earlier build.
-     *
-     * <p>A previous version's Kick preset appended {@code /app} on the
-     * assumption that IVS required an application path. It does not - Kick
-     * publishes to {@code rtmps://<host>/<key>} - and the extra segment makes
-     * the handshake fail with nothing but FFmpeg's opaque "Input/output error".
-     * Saved destinations keep the bad value, so it is corrected here.</p>
-     *
-     * <p>Keyed on the URL rather than the platform: the Kick preset has since
-     * been removed, so those destinations now load as {@code CUSTOM}.</p>
-     */
+    /** Restores the Kick/IVS application path removed by older config migrations. */
     private static void repairIvsIngestUrls(StreamAbleConfig config) {
         if (config.streaming == null || config.streaming.destinations == null) {
             return;
         }
         for (StreamingSettings.Destination destination : config.streaming.destinations) {
-            if (destination == null) {
+            if (destination == null || destination.ingestUrl == null) {
                 continue;
             }
-            String url = destination.ingestUrl;
-            if (url == null) {
-                continue;
-            }
-            String trimmed = url.trim();
-            // Only the exact shape that build produced, so a deliberate custom
-            // path on some other host is never touched.
-            if (trimmed.toLowerCase(java.util.Locale.ROOT).contains("live-video.net")
-                    && trimmed.endsWith("/app")) {
-                destination.ingestUrl = trimmed.substring(0, trimmed.length() - "/app".length());
-                StreamAbleLog.CORE.info(
-                        "Removed the incorrect '/app' path from an Amazon IVS ingest URL; "
-                                + "IVS publishes to rtmps://<host>/<key>.");
+            String corrected = dev.streamable.streaming.StreamingCredentials.normalizeIngestUrl(destination.ingestUrl);
+            if (!corrected.equals(destination.ingestUrl)) {
+                destination.ingestUrl = corrected;
+                StreamAbleLog.CORE.info("Repaired a Kick/IVS ingest endpoint to use RTMPS on port 443 with /app.");
             }
         }
     }

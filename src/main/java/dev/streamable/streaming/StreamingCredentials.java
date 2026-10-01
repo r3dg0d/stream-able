@@ -15,8 +15,31 @@ import java.util.Objects;
 public record StreamingCredentials(String ingestUrl, String streamKey) {
 
     public StreamingCredentials {
-        ingestUrl = ingestUrl == null ? "" : ingestUrl.trim();
+        ingestUrl = normalizeIngestUrl(ingestUrl);
         streamKey = streamKey == null ? "" : streamKey.trim();
+    }
+
+    /** Repairs pathless Kick/IVS endpoints without rewriting other custom targets. */
+    public static String normalizeIngestUrl(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        try {
+            java.net.URI uri = java.net.URI.create(trimmed);
+            String host = uri.getHost();
+            String scheme = uri.getScheme();
+            String path = uri.getRawPath();
+            if (host != null && host.toLowerCase(java.util.Locale.ROOT)
+                    .endsWith(".global-contribute.live-video.net")
+                    && ("rtmp".equalsIgnoreCase(scheme) || "rtmps".equalsIgnoreCase(scheme))
+                    && uri.getRawUserInfo() == null && uri.getRawQuery() == null && uri.getRawFragment() == null
+                    && (uri.getPort() == -1 || uri.getPort() == 443 || uri.getPort() == 1935)
+                    && (path == null || path.isEmpty() || path.equals("/")
+                        || path.equals("/app") || path.equals("/app/"))) {
+                return "rtmps://" + host + ":443/app";
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Validation reports malformed input; normalization must not prevent editing it.
+        }
+        return trimmed;
     }
 
     /**
