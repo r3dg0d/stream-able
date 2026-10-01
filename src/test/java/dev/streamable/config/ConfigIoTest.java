@@ -17,6 +17,29 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ConfigIoTest {
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "\"streaming\": null",
+            "\"streaming\": {\"destinations\": null}",
+            "\"streaming\": {\"destinations\": [null, {\"name\": \"Saved\", \"streamKey\": \"fixture_key\"}]}",
+            "\"microphone\": {\"noise\": null}"
+    })
+    void nullSectionsAreRepairedBeforeMigrationWithoutDiscardingSettings(String section,
+            @TempDir Path dir) throws IOException {
+        Path file = dir.resolve(ConfigIo.CONFIG_FILE_NAME);
+        Files.writeString(file, "{\"schemaVersion\": 1, \"recording\": {\"fps\": 24, "
+                + "\"noiseSuppression\": true}, " + section + "}");
+        StreamAbleConfig loaded = ConfigIo.load(dir);
+        assertEquals(24, loaded.recording.fps, "repairable nulls must not reset unrelated settings");
+        assertFalse(Files.exists(dir.resolve(ConfigIo.CONFIG_FILE_NAME + ".broken")));
+        assertNotNull(loaded.streaming.destinations);
+        assertNotNull(loaded.microphone.noise);
+        if (section.contains("fixture_key")) {
+            assertEquals(1, loaded.streaming.destinations.size());
+            assertEquals("fixture_key", loaded.streaming.destinations.getFirst().streamKey);
+        }
+    }
+
     @Test
     void savesAndReloadsRoundTrip(@TempDir Path dir) {
         StreamAbleConfig config = new StreamAbleConfig();

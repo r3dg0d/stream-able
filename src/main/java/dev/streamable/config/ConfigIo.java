@@ -85,7 +85,13 @@ public final class ConfigIo {
      * been removed, so those destinations now load as {@code CUSTOM}.</p>
      */
     private static void repairIvsIngestUrls(StreamAbleConfig config) {
+        if (config.streaming == null || config.streaming.destinations == null) {
+            return;
+        }
         for (StreamingSettings.Destination destination : config.streaming.destinations) {
+            if (destination == null) {
+                continue;
+            }
             String url = destination.ingestUrl;
             if (url == null) {
                 continue;
@@ -113,8 +119,14 @@ public final class ConfigIo {
      * that host remains documented and reachable.</p>
      */
     private static void repairYoutubeIngestUrls(StreamAbleConfig config) {
+        if (config.streaming == null || config.streaming.destinations == null) {
+            return;
+        }
         String target = StreamPlatform.YOUTUBE.defaultIngestUrl();
         for (StreamingSettings.Destination destination : config.streaming.destinations) {
+            if (destination == null) {
+                continue;
+            }
             String url = destination.ingestUrl;
             if (url == null) {
                 continue;
@@ -202,6 +214,9 @@ public final class ConfigIo {
             mic.inputGainDb = percent <= 0 ? -24 : Math.round(20 * Math.log10(percent / 100.0) * 2) / 2.0;
             mic.device = recording.microphoneDevice == null ? "" : recording.microphoneDevice;
             if (recording.noiseSuppression) {
+                if (mic.noise == null) {
+                    mic.noise = new MicrophoneSettings.NoiseCancellation();
+                }
                 mic.noise.level = MicrophoneSettings.NoiseLevel.BALANCED;
             }
             mic.pushToTalk = recording.pushToTalk;

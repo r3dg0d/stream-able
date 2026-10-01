@@ -4,6 +4,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Fixed
+- Repair null streaming sections, destination lists/entries and legacy microphone
+  noise settings during migration instead of quarantining an otherwise valid
+  config and resetting unrelated settings or saved destinations.
+
 ### Added
 - **Boot test in CI.** A Fabric client game test starts a real client and a world on each
   supported Minecraft version, presses the Studio key through the game's own input path,
