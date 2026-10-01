@@ -4,6 +4,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+## 1.4.1 - 2026-10-01
+
+Reliability update for Minecraft 26.1.2, 26.2 and 26.3 (Fabric).
+
 ### Fixed
 - Isolate multistream destination writes with bounded FFmpeg FIFO packet queues.
   A stalled ingest no longer blocks the shared encoder and healthy destinations;

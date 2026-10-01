@@ -231,7 +231,7 @@ Linux and Windows are both first-class. Frame capture reads Minecraft's own rend
 
 ## Verification status
 
-What has been checked, and how (Stream-able **1.4.0** on Minecraft **26.1.2**, **26.2** and **26.3**):
+What has been checked, and how (Stream-able **1.4.1** on Minecraft **26.1.2**, **26.2** and **26.3**):
 
 - **Unit and integration tests** (`./gradlew test`, 61 test classes): runtime manifest and installer, archive safety, scaling maths, command building, frame pacing and timelines, the audio mixer, every DSP stage, the noise-cancellation stage and manager, real model inference against the pinned ONNX Runtime and model files (optional, `STREAMABLE_MODEL_DIR`), the destination tester against a local sink, config migration, diagnostics redaction, container compatibility, voice chat mixing and distance fading, replay segment and audio-ring handling, clip triggers, watermark rasterising, parsing of browser audio chunks, the disk-space
   guardian thresholds and shared recording ETA (`secondsRemaining`), Stream
