@@ -18,7 +18,8 @@ class FFmpegManagerTimeoutTest {
         Path pidFile = dir.resolve("child.pid");
         Path executable = dir.resolve("silent-ffmpeg");
         // The shell is replaced, so the owned PID is also the sleeping child.
-        Files.writeString(executable, "#!" + shell + "\necho $$ > '" + pidFile + "'\nexec sleep 120\n");
+        Files.writeString(executable, "#!" + shell + "\necho $$ > '" + pidFile + ".pending'\n"
+                + "mv '" + pidFile + ".pending' '" + pidFile + "'\nexec sleep 120\n");
         assertTrue(executable.toFile().setExecutable(true));
         FFmpegManager manager = new FFmpegManager();
         manager.setAllowSystemPath(false);

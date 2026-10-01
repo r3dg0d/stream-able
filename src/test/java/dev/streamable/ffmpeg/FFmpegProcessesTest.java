@@ -61,7 +61,10 @@ class FFmpegProcessesTest {
 
     public static class Child {
         public static void main(String[] args) throws Exception {
-            Files.writeString(Path.of(args[1]), Long.toString(ProcessHandle.current().pid()));
+            Path pid = Path.of(args[1]);
+            Path pending = pid.resolveSibling(pid.getFileName() + ".pending");
+            Files.writeString(pending, Long.toString(ProcessHandle.current().pid()));
+            Files.move(pending, pid); // Publish only after the PID is fully written.
             switch (args[0]) {
                 case "silent" -> Thread.sleep(120000);
                 case "noisy" -> {
