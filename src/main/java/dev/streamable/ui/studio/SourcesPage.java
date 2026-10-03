@@ -306,7 +306,7 @@ final class SourcesPage {
             source.setShutdownWhenHidden(v);
             s.changed();
         }).tooltip("Frees memory while hidden; the page restarts when shown again."));
-        card.add(new Slider("Page volume", 0, 2, 0.01, source::audioVolume, v -> {
+        card.add(new Slider("Page volume", 0, 1, 0.01, source::audioVolume, v -> {
             source.setAudioVolume((float) v);
             s.changed();
         }).format(v -> Math.round(v * 100) + "%").defaultValue(1)

@@ -5,6 +5,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Studio Page volume now stops at 100%. The slider allowed 0–200%, but
+  `BrowserSource.setAudioVolume` stores at most 100%, so the upper half of
+  the slider did nothing. Opacity on the same card was already 0–100%.
+
 - Recording disk tooltips no longer say the recording stops below a hardcoded
   100 MB. They show the configured free-space floor (`diskSpaceMinFreeMb`,
   default 500). That floor is also what stops a recording, not a separate
