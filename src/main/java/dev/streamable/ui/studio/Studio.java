@@ -258,10 +258,21 @@ public final class Studio {
      * soon as it parses and lies within the range.
      */
     public TextField intField(String label, IntSupplier get, IntConsumer set, int min, int max) {
+        return intField(label, get, set, () -> min, () -> max);
+    }
+
+    /**
+     * Same as {@link #intField(String, IntSupplier, IntConsumer, int, int)}, but the
+     * range is read on each edit so one field can follow another. The reconnect
+     * ceiling uses this so its minimum stays at the current first-retry delay.
+     */
+    public TextField intField(String label, IntSupplier get, IntConsumer set, IntSupplier min, IntSupplier max) {
         return new TextField(label, () -> Integer.toString(get.getAsInt()), text -> {
             try {
                 int value = Integer.parseInt(text.trim());
-                if (value >= min && value <= max) {
+                int lo = min.getAsInt();
+                int hi = max.getAsInt();
+                if (lo <= hi && value >= lo && value <= hi) {
                     set.accept(value);
                     changed();
                 }

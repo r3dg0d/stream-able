@@ -57,6 +57,15 @@ public final class StreamingSettings {
     public int audioSampleRate = 48_000;
 
     // ---- reliability -------------------------------------------------------
+    /**
+     * Shared by {@link #validate()} and the Studio reconnect fields.
+     * Attempts of {@code 0} mean unlimited ({@code ReconnectPolicy}).
+     */
+    public static final int MIN_RECONNECT_DELAY_MS = 250;
+    public static final int MAX_INITIAL_RECONNECT_DELAY_MS = 300_000;
+    public static final int MAX_RECONNECT_DELAY_MS = 900_000;
+    public static final int MAX_RECONNECT_ATTEMPTS = 1000;
+
     public boolean reconnect = true;
     public long reconnectDelayMs = 5_000;
     public long maxReconnectDelayMs = 60_000;
@@ -67,6 +76,58 @@ public final class StreamingSettings {
 
     /** Measured upstream capacity; zero means unknown. 20% is reserved at session start. */
     public double uploadSpeedMbps = 0;
+
+    /**
+     * Lowest longest-wait the Studio field will accept: the current first retry,
+     * already clamped to the same range {@link #validate()} uses for that delay.
+     */
+    public int longestWaitMinMs() {
+        return (int) Math.clamp(reconnectDelayMs, MIN_RECONNECT_DELAY_MS, MAX_INITIAL_RECONNECT_DELAY_MS);
+    }
+
+    /**
+     * Studio edit for the first retry. Raises the longest wait when the new delay
+     * would leave it shorter, which is what {@link #validate()} does on save.
+     *
+     * @return false when {@code value} is outside the validated range and nothing changed
+     */
+    public boolean trySetReconnectDelayMs(long value) {
+        if (value < MIN_RECONNECT_DELAY_MS || value > MAX_INITIAL_RECONNECT_DELAY_MS) {
+            return false;
+        }
+        reconnectDelayMs = value;
+        if (maxReconnectDelayMs < value) {
+            maxReconnectDelayMs = value;
+        }
+        return true;
+    }
+
+    /**
+     * Studio edit for the longest wait. Rejects a ceiling below the first retry
+     * instead of storing it for {@link #validate()} to fix later.
+     *
+     * @return false when {@code value} is outside the validated range and nothing changed
+     */
+    public boolean trySetMaxReconnectDelayMs(long value) {
+        if (value < longestWaitMinMs() || value > MAX_RECONNECT_DELAY_MS) {
+            return false;
+        }
+        maxReconnectDelayMs = value;
+        return true;
+    }
+
+    /**
+     * Studio edit for the attempt cap. {@code 0} is unlimited.
+     *
+     * @return false when {@code value} is outside {@code 0}..{@link #MAX_RECONNECT_ATTEMPTS}
+     */
+    public boolean trySetMaxReconnectAttempts(int value) {
+        if (value < 0 || value > MAX_RECONNECT_ATTEMPTS) {
+            return false;
+        }
+        maxReconnectAttempts = value;
+        return true;
+    }
 
     public ReconnectPolicy reconnectPolicy() {
         return new ReconnectPolicy(reconnect, reconnectDelayMs, maxReconnectDelayMs, 2.0, maxReconnectAttempts);
@@ -97,9 +158,9 @@ public final class StreamingSettings {
         keyframeSeconds = keyframeSeconds <= 0 ? 2.0 : Math.clamp(keyframeSeconds, 0.5, 10.0);
         audioBitrateKbps = Math.clamp(audioBitrateKbps, 32, 512);
         bFrames = Math.clamp(bFrames, 0, 8);
-        maxReconnectAttempts = Math.clamp(maxReconnectAttempts, 0, 1000);
-        reconnectDelayMs = Math.clamp(reconnectDelayMs, 250, 300_000);
-        maxReconnectDelayMs = Math.clamp(maxReconnectDelayMs, reconnectDelayMs, 900_000);
+        maxReconnectAttempts = Math.clamp(maxReconnectAttempts, 0, MAX_RECONNECT_ATTEMPTS);
+        reconnectDelayMs = Math.clamp(reconnectDelayMs, MIN_RECONNECT_DELAY_MS, MAX_INITIAL_RECONNECT_DELAY_MS);
+        maxReconnectDelayMs = Math.clamp(maxReconnectDelayMs, reconnectDelayMs, MAX_RECONNECT_DELAY_MS);
         frameQueueCapacity = Math.clamp(frameQueueCapacity, 8, 600);
         uploadSpeedMbps = Double.isFinite(uploadSpeedMbps) ? Math.clamp(uploadSpeedMbps, 0, 10000) : 0;
         if (audioCodec == null) {

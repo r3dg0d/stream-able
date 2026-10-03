@@ -83,9 +83,18 @@ final class StreamingPage {
         }).detail(() -> "Each destination retries on its own; the others stay live."));
         Layouts.Grid retry = reconnect.add(new Layouts.Grid(150, Theme.SPACE_5));
         retry.visibleWhen(() -> st.reconnect);
-        retry.add(s.intField("First retry after (ms)", () -> (int) st.reconnectDelayMs, v -> st.reconnectDelayMs = v, 500, 120_000));
-        retry.add(s.intField("Longest wait (ms)", () -> (int) st.maxReconnectDelayMs, v -> st.maxReconnectDelayMs = v, 1000, 600_000));
-        retry.add(s.intField("Give up after attempts", () -> st.maxReconnectAttempts, v -> st.maxReconnectAttempts = v, 1, 1000));
+        retry.add(s.intField("First retry after (ms)", () -> (int) st.reconnectDelayMs,
+                v -> st.trySetReconnectDelayMs(v),
+                StreamingSettings.MIN_RECONNECT_DELAY_MS, StreamingSettings.MAX_INITIAL_RECONNECT_DELAY_MS)
+                .tooltip("Wait before the first retry. If this is longer than the longest wait, that ceiling is raised to match."));
+        retry.add(s.intField("Longest wait (ms)", () -> (int) st.maxReconnectDelayMs,
+                v -> st.trySetMaxReconnectDelayMs(v),
+                st::longestWaitMinMs, () -> StreamingSettings.MAX_RECONNECT_DELAY_MS)
+                .tooltip("Backoff never waits longer than this. It cannot be shorter than the first retry."));
+        retry.add(s.intField("Give up after attempts", () -> st.maxReconnectAttempts,
+                v -> st.trySetMaxReconnectAttempts(v),
+                0, StreamingSettings.MAX_RECONNECT_ATTEMPTS)
+                .tooltip("0 keeps retrying until you stop the stream. Any other value is the attempt cap."));
 
         if (!st.advancedMode) {
             return;

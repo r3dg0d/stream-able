@@ -5,6 +5,9 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Studio reconnect fields now use the same bounds as validation. The longest wait
+  cannot be set below the first retry (it rises when the first retry would pass it),
+  and 0 attempts means unlimited instead of being rejected by the field.
 - A destination whose encoder fails to spawn (missing FFmpeg, a port that will
   not bind) now follows the same reconnect backoff as a dropped process. Previously
   only an unexpected exit armed the timer, so that destination stayed on error
