@@ -44,7 +44,8 @@ final class StreamingPage {
                 client.encoderProbe().resolve(st.encoder, true))
                 + " Live streams use H.264, the codec every ingest accepts.")
                 .color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION).wrap());
-        video.add(new Slider("Video bitrate", 500, 20_000, 100, () -> st.bitrateKbps, v -> {
+        video.add(new Slider("Video bitrate", StreamingSettings.MIN_BITRATE_KBPS,
+                StreamingSettings.MAX_BITRATE_KBPS, 100, () -> st.bitrateKbps, v -> {
             st.bitrateKbps = (int) Math.round(v);
             if (st.rateControl == RateControl.CBR) {
                 st.maxBitrateKbps = st.bitrateKbps;
@@ -57,7 +58,8 @@ final class StreamingPage {
                 .color(Theme.TEXT_SECONDARY).scale(Theme.TEXT_CAPTION).wrap());
 
         video.add(s.doubleField("Measured upload speed (Mbps; 0 = unknown)", () -> st.uploadSpeedMbps,
-                v -> st.uploadSpeedMbps = v, 0, 10000)
+                v -> st.uploadSpeedMbps = v,
+                StreamingSettings.MIN_UPLOAD_SPEED_MBPS, StreamingSettings.MAX_UPLOAD_SPEED_MBPS)
                 .tooltip("Enter upload, not download. All destinations share 80% of it; settings apply next stream."));
         video.add(new Label(() -> {
             try { return client.streaming().uploadBudget(st).describe(); }
@@ -73,7 +75,8 @@ final class StreamingPage {
             st.audioCodec = codecs.get(i);
             s.changed();
         }).placeholder(() -> st.audioCodec.displayName() + " (not accepted by RTMP)"));
-        audioGrid.add(s.intField("Bitrate (kbps)", () -> st.audioBitrateKbps, v -> st.audioBitrateKbps = v, 64, 320));
+        audioGrid.add(s.intField("Bitrate (kbps)", () -> st.audioBitrateKbps, v -> st.audioBitrateKbps = v,
+                StreamingSettings.MIN_AUDIO_BITRATE_KBPS, StreamingSettings.MAX_AUDIO_BITRATE_KBPS));
 
         Widgets.Card reconnect = page.add(new Widgets.Card(Theme.SPACE_5));
         reconnect.add(new Widgets.SectionHeader("Connection", () -> "What happens when a destination drops"));
@@ -109,13 +112,18 @@ final class StreamingPage {
             s.changed();
         }).tooltip("CBR keeps the bitrate steady, which live ingests expect. VBR can save bandwidth on static scenes."));
         Layouts.Grid grid = advanced.add(new Layouts.Grid(150, Theme.SPACE_5));
-        grid.add(s.intField("Maximum bitrate (kbps)", () -> st.maxBitrateKbps, v -> st.maxBitrateKbps = v, 500, 200_000)
+        grid.add(s.intField("Maximum bitrate (kbps)", () -> st.maxBitrateKbps, v -> st.maxBitrateKbps = v,
+                StreamingSettings.MIN_MAX_BITRATE_KBPS, StreamingSettings.MAX_MAX_BITRATE_KBPS)
                 .visibleWhen(() -> st.rateControl == RateControl.VBR));
-        grid.add(s.intField("Buffer size (kbit)", () -> st.bufferSizeKbits, v -> st.bufferSizeKbits = v, 500, 400_000));
-        grid.add(s.doubleField("Keyframe interval (s)", () -> st.keyframeSeconds, v -> st.keyframeSeconds = v, 0.5, 10)
+        grid.add(s.intField("Buffer size (kbit)", () -> st.bufferSizeKbits, v -> st.bufferSizeKbits = v,
+                StreamingSettings.MIN_BUFFER_SIZE_KBITS, StreamingSettings.MAX_BUFFER_SIZE_KBITS));
+        grid.add(s.doubleField("Keyframe interval (s)", () -> st.keyframeSeconds, v -> st.keyframeSeconds = v,
+                StreamingSettings.MIN_KEYFRAME_SECONDS, StreamingSettings.MAX_KEYFRAME_SECONDS)
                 .tooltip("Most services require 2 seconds."));
-        grid.add(s.intField("B-frames", () -> st.bFrames, v -> st.bFrames = v, 0, 4));
-        grid.add(s.intField("Encoder queue (frames)", () -> st.frameQueueCapacity, v -> st.frameQueueCapacity = v, 10, 600)
+        grid.add(s.intField("B-frames", () -> st.bFrames, v -> st.bFrames = v,
+                StreamingSettings.MIN_B_FRAMES, StreamingSettings.MAX_B_FRAMES));
+        grid.add(s.intField("Encoder queue (frames)", () -> st.frameQueueCapacity, v -> st.frameQueueCapacity = v,
+                StreamingSettings.MIN_FRAME_QUEUE_CAPACITY, StreamingSettings.MAX_FRAME_QUEUE_CAPACITY)
                 .tooltip("Frames buffered ahead of the encoder. Higher tolerates hiccups but adds memory use."));
         grid.add(new dev.streamable.ui.kit.TextField("Encoder preset", () -> st.preset, v -> {
             st.preset = v.strip();

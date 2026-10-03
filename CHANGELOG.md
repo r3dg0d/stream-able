@@ -5,6 +5,12 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Studio numeric fields now use the same bounds as validation: stream audio
+  bitrate 32–512 kbps, B-frames 0–8, encoder queue 8–600 frames, video bitrate
+  100–200,000 kbps, maximum bitrate 100–400,000 kbps, and buffer size
+  100–800,000 kbit. Recording bitrate, audio bitrate, sync offset and replay
+  length, the HUD size, opacity and snap distance, and noise-reduction amount
+  match their validators too. Reconnect policy is unchanged.
 - Studio reconnect fields now use the same bounds as validation. The longest wait
   cannot be set below the first retry (it rises when the first retry would pass it),
   and 0 attempts means unlimited instead of being rejected by the field.

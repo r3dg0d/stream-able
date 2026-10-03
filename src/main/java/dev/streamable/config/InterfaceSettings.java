@@ -3,6 +3,14 @@ package dev.streamable.config;
 /** Overlay, HUD and source-editor preferences. */
 public final class InterfaceSettings {
 
+    /** Shared by {@link #validate()} and the Studio HUD and editor sliders. */
+    public static final double MIN_SNAP_PX = 0;
+    public static final double MAX_SNAP_PX = 64;
+    public static final float MIN_HUD_SCALE = 0.5f;
+    public static final float MAX_HUD_SCALE = 3.0f;
+    public static final float MIN_HUD_OPACITY = 0.1f;
+    public static final float MAX_HUD_OPACITY = 1.0f;
+
     /** Stream health HUD. Distinct from a browser source - this is Stream-able's own. */
     public boolean showStreamHud = true;
     public boolean detailedStreamHud = false;
@@ -35,11 +43,11 @@ public final class InterfaceSettings {
         if (!Float.isFinite(streamHudScale)) {
             streamHudScale = 1.0f;
         }
-        streamHudScale = (float) Math.clamp(streamHudScale, 0.5, 3.0);
+        streamHudScale = (float) Math.clamp(streamHudScale, MIN_HUD_SCALE, MAX_HUD_SCALE);
         if (!Float.isFinite(streamHudOpacity)) {
             streamHudOpacity = 0.85f;
         }
-        streamHudOpacity = (float) Math.clamp(streamHudOpacity, 0.1, 1.0);
+        streamHudOpacity = (float) Math.clamp(streamHudOpacity, MIN_HUD_OPACITY, MAX_HUD_OPACITY);
         if (!Float.isFinite(streamHudX) || streamHudX > 1) {
             streamHudX = -1;
         }
@@ -51,6 +59,6 @@ public final class InterfaceSettings {
         if (!Double.isFinite(snapThreshold)) {
             snapThreshold = 8.0;
         }
-        snapThreshold = Math.clamp(snapThreshold, 0.0, 64.0);
+        snapThreshold = Math.clamp(snapThreshold, MIN_SNAP_PX, MAX_SNAP_PX);
     }
 }

@@ -39,7 +39,8 @@ final class AdvancedPage {
             client.applyInterfaceSettings();
             s.changed();
         }));
-        editor.add(new Slider("Snap distance", 0, 32, 1, () -> ui.snapThreshold, v -> {
+        editor.add(new Slider("Snap distance", InterfaceSettings.MIN_SNAP_PX, InterfaceSettings.MAX_SNAP_PX,
+                1, () -> ui.snapThreshold, v -> {
             ui.snapThreshold = v;
             client.applyInterfaceSettings();
             s.changed();
@@ -67,11 +68,13 @@ final class AdvancedPage {
             ui.streamHudY = -1;
             s.changed();
         }));
-        hud.add(new Slider("Size", 0.5, 2, 0.05, () -> ui.streamHudScale, v -> {
+        hud.add(new Slider("Size", InterfaceSettings.MIN_HUD_SCALE, InterfaceSettings.MAX_HUD_SCALE,
+                0.05, () -> ui.streamHudScale, v -> {
             ui.streamHudScale = (float) v;
             s.changed();
         }).format(v -> Math.round(v * 100) + "%").defaultValue(1));
-        hud.add(new Slider("Opacity", 0.2, 1, 0.05, () -> ui.streamHudOpacity, v -> {
+        hud.add(new Slider("Opacity", InterfaceSettings.MIN_HUD_OPACITY, InterfaceSettings.MAX_HUD_OPACITY,
+                0.05, () -> ui.streamHudOpacity, v -> {
             ui.streamHudOpacity = (float) v;
             s.changed();
         }).format(v -> Math.round(v * 100) + "%").defaultValue(0.85));

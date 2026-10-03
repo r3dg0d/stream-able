@@ -58,13 +58,32 @@ public final class StreamingSettings {
 
     // ---- reliability -------------------------------------------------------
     /**
-     * Shared by {@link #validate()} and the Studio reconnect fields.
+     * Shared by {@link #validate()} and the Studio controls.
      * Attempts of {@code 0} mean unlimited ({@code ReconnectPolicy}).
+     * A non-positive max bitrate, buffer, or keyframe is a load sentinel, not a
+     * value the Studio fields offer.
      */
     public static final int MIN_RECONNECT_DELAY_MS = 250;
     public static final int MAX_INITIAL_RECONNECT_DELAY_MS = 300_000;
     public static final int MAX_RECONNECT_DELAY_MS = 900_000;
     public static final int MAX_RECONNECT_ATTEMPTS = 1000;
+
+    public static final int MIN_BITRATE_KBPS = 100;
+    public static final int MAX_BITRATE_KBPS = 200_000;
+    public static final int MIN_MAX_BITRATE_KBPS = 100;
+    public static final int MAX_MAX_BITRATE_KBPS = 400_000;
+    public static final int MIN_BUFFER_SIZE_KBITS = 100;
+    public static final int MAX_BUFFER_SIZE_KBITS = 800_000;
+    public static final double MIN_KEYFRAME_SECONDS = 0.5;
+    public static final double MAX_KEYFRAME_SECONDS = 10.0;
+    public static final int MIN_AUDIO_BITRATE_KBPS = 32;
+    public static final int MAX_AUDIO_BITRATE_KBPS = 512;
+    public static final int MIN_B_FRAMES = 0;
+    public static final int MAX_B_FRAMES = 8;
+    public static final int MIN_FRAME_QUEUE_CAPACITY = 8;
+    public static final int MAX_FRAME_QUEUE_CAPACITY = 600;
+    public static final double MIN_UPLOAD_SPEED_MBPS = 0;
+    public static final double MAX_UPLOAD_SPEED_MBPS = 10_000;
 
     public boolean reconnect = true;
     public long reconnectDelayMs = 5_000;
@@ -152,17 +171,21 @@ public final class StreamingSettings {
         width = Math.clamp(width - (width % 2), 16, 16384);
         height = Math.clamp(height - (height % 2), 16, 16384);
         fps = Math.clamp(fps, 1, 240);
-        bitrateKbps = Math.clamp(bitrateKbps, 100, 200_000);
-        maxBitrateKbps = maxBitrateKbps <= 0 ? bitrateKbps : Math.clamp(maxBitrateKbps, 100, 400_000);
-        bufferSizeKbits = bufferSizeKbits <= 0 ? bitrateKbps * 2 : Math.clamp(bufferSizeKbits, 100, 800_000);
-        keyframeSeconds = keyframeSeconds <= 0 ? 2.0 : Math.clamp(keyframeSeconds, 0.5, 10.0);
-        audioBitrateKbps = Math.clamp(audioBitrateKbps, 32, 512);
-        bFrames = Math.clamp(bFrames, 0, 8);
+        bitrateKbps = Math.clamp(bitrateKbps, MIN_BITRATE_KBPS, MAX_BITRATE_KBPS);
+        maxBitrateKbps = maxBitrateKbps <= 0 ? bitrateKbps
+                : Math.clamp(maxBitrateKbps, MIN_MAX_BITRATE_KBPS, MAX_MAX_BITRATE_KBPS);
+        bufferSizeKbits = bufferSizeKbits <= 0 ? bitrateKbps * 2
+                : Math.clamp(bufferSizeKbits, MIN_BUFFER_SIZE_KBITS, MAX_BUFFER_SIZE_KBITS);
+        keyframeSeconds = keyframeSeconds <= 0 ? 2.0
+                : Math.clamp(keyframeSeconds, MIN_KEYFRAME_SECONDS, MAX_KEYFRAME_SECONDS);
+        audioBitrateKbps = Math.clamp(audioBitrateKbps, MIN_AUDIO_BITRATE_KBPS, MAX_AUDIO_BITRATE_KBPS);
+        bFrames = Math.clamp(bFrames, MIN_B_FRAMES, MAX_B_FRAMES);
         maxReconnectAttempts = Math.clamp(maxReconnectAttempts, 0, MAX_RECONNECT_ATTEMPTS);
         reconnectDelayMs = Math.clamp(reconnectDelayMs, MIN_RECONNECT_DELAY_MS, MAX_INITIAL_RECONNECT_DELAY_MS);
         maxReconnectDelayMs = Math.clamp(maxReconnectDelayMs, reconnectDelayMs, MAX_RECONNECT_DELAY_MS);
-        frameQueueCapacity = Math.clamp(frameQueueCapacity, 8, 600);
-        uploadSpeedMbps = Double.isFinite(uploadSpeedMbps) ? Math.clamp(uploadSpeedMbps, 0, 10000) : 0;
+        frameQueueCapacity = Math.clamp(frameQueueCapacity, MIN_FRAME_QUEUE_CAPACITY, MAX_FRAME_QUEUE_CAPACITY);
+        uploadSpeedMbps = Double.isFinite(uploadSpeedMbps)
+                ? Math.clamp(uploadSpeedMbps, MIN_UPLOAD_SPEED_MBPS, MAX_UPLOAD_SPEED_MBPS) : 0;
         if (audioCodec == null) {
             audioCodec = AudioCodec.AAC;
         }

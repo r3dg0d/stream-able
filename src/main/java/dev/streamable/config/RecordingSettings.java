@@ -69,8 +69,12 @@ public final class RecordingSettings {
     /** Empty means auto-detect: the best encoder that passed its test encode, hardware first. */
     public String encoder = "";
     public RateControl rateControl = RateControl.CONSTANT_QUALITY;
+    public static final int MIN_BITRATE_KBPS = 100;
+    public static final int MAX_BITRATE_KBPS = 400_000;
     public int bitrateKbps = 20_000;
     /** 0 = fastest/lowest quality, 100 = slowest/highest. Maps to encoder presets. */
+    public static final int MIN_QUALITY_PRESET = 0;
+    public static final int MAX_QUALITY_PRESET = 100;
     public int qualityPreset = 50;
 
     public long maxFileSizeMb = 0;              // 0 = unlimited
@@ -97,9 +101,13 @@ public final class RecordingSettings {
     /** Capture Plasmo Voice proximity chat into recordings and streams. */
     public boolean captureVoiceChat = true;
     public AudioCodec audioCodec = AudioCodec.AAC;
+    public static final int MIN_AUDIO_BITRATE_KBPS = 32;
+    public static final int MAX_AUDIO_BITRATE_KBPS = 1024;
     public int audioBitrateKbps = 192;
     public int audioSampleRate = 48_000;
     /** Manual A/V nudge in milliseconds, on top of the measured start offset. */
+    public static final int MIN_AUDIO_DELAY_MS = -5_000;
+    public static final int MAX_AUDIO_DELAY_MS = 5_000;
     public int audioDelayMs = 0;
 
     // Replay buffer and automatic clips: see recording/replay. Dead Record-able
@@ -110,6 +118,8 @@ public final class RecordingSettings {
 
     // ---- replay buffer and clips ------------------------------------------
     public boolean replayBufferEnabled = false;
+    public static final int MIN_REPLAY_SECONDS = 5;
+    public static final int MAX_REPLAY_SECONDS = 600;
     public int replayBufferSeconds = 60;
     public boolean autoClipOnDeath = true;
     public boolean autoClipOnAdvancement = false;
@@ -125,12 +135,12 @@ public final class RecordingSettings {
         fps = Math.clamp(fps, 1, 240);
         width = Math.clamp(width - (width % 2), 16, 16384);
         height = Math.clamp(height - (height % 2), 16, 16384);
-        bitrateKbps = Math.clamp(bitrateKbps, 100, 400_000);
-        qualityPreset = Math.clamp(qualityPreset, 0, 100);
+        bitrateKbps = Math.clamp(bitrateKbps, MIN_BITRATE_KBPS, MAX_BITRATE_KBPS);
+        qualityPreset = Math.clamp(qualityPreset, MIN_QUALITY_PRESET, MAX_QUALITY_PRESET);
         microphoneGainPercent = Math.clamp(microphoneGainPercent, 0, 400);
-        audioBitrateKbps = Math.clamp(audioBitrateKbps, 32, 1024);
-        audioDelayMs = Math.clamp(audioDelayMs, -5000, 5000);
-        replayBufferSeconds = Math.clamp(replayBufferSeconds, 5, 600);
+        audioBitrateKbps = Math.clamp(audioBitrateKbps, MIN_AUDIO_BITRATE_KBPS, MAX_AUDIO_BITRATE_KBPS);
+        audioDelayMs = Math.clamp(audioDelayMs, MIN_AUDIO_DELAY_MS, MAX_AUDIO_DELAY_MS);
+        replayBufferSeconds = Math.clamp(replayBufferSeconds, MIN_REPLAY_SECONDS, MAX_REPLAY_SECONDS);
         maxFileSizeMb = Math.max(0, maxFileSizeMb);
         diskSpaceBlockPercent = Math.clamp(diskSpaceBlockPercent, 50, 100);
         diskSpaceWarnPercent = Math.clamp(diskSpaceWarnPercent, 1, diskSpaceBlockPercent - 1);

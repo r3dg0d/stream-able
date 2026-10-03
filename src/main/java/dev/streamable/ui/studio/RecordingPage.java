@@ -115,12 +115,14 @@ final class RecordingPage {
             rec.rateControl = modes.get(i);
             s.changed();
         }).tooltip("Constant quality spends bits where the picture needs them and is best for recordings."));
-        video.add(new Slider("Quality", 0, 100, 1, () -> rec.qualityPreset, v -> {
+        video.add(new Slider("Quality", RecordingSettings.MIN_QUALITY_PRESET, RecordingSettings.MAX_QUALITY_PRESET,
+                1, () -> rec.qualityPreset, v -> {
             rec.qualityPreset = (int) Math.round(v);
             s.changed();
         }).format(v -> qualityLabel((int) Math.round(v))).defaultValue(50)
                 .visibleWhen(() -> rec.rateControl == RateControl.CONSTANT_QUALITY));
-        video.add(s.intField("Bitrate (kbps)", () -> rec.bitrateKbps, v -> rec.bitrateKbps = v, 500, 500_000)
+        video.add(s.intField("Bitrate (kbps)", () -> rec.bitrateKbps, v -> rec.bitrateKbps = v,
+                RecordingSettings.MIN_BITRATE_KBPS, RecordingSettings.MAX_BITRATE_KBPS)
                 .visibleWhen(() -> rec.rateControl != RateControl.CONSTANT_QUALITY));
 
         Widgets.Card audio = page.add(new Widgets.Card(Theme.SPACE_5));
@@ -149,9 +151,11 @@ final class RecordingPage {
         Layouts.Grid codec = audio.add(new Layouts.Grid(170, Theme.SPACE_5));
         codec.add(s.enumDropdown("Codec", AudioCodec.values(), AudioCodec::displayName, () -> rec.audioCodec,
                 v -> rec.audioCodec = v));
-        codec.add(s.intField("Bitrate (kbps)", () -> rec.audioBitrateKbps, v -> rec.audioBitrateKbps = v, 64, 512)
+        codec.add(s.intField("Bitrate (kbps)", () -> rec.audioBitrateKbps, v -> rec.audioBitrateKbps = v,
+                RecordingSettings.MIN_AUDIO_BITRATE_KBPS, RecordingSettings.MAX_AUDIO_BITRATE_KBPS)
                 .visibleWhen(() -> rec.audioCodec == AudioCodec.AAC || rec.audioCodec == AudioCodec.OPUS));
-        codec.add(s.intField("Sync offset (ms)", () -> rec.audioDelayMs, v -> rec.audioDelayMs = v, -1000, 1000)
+        codec.add(s.intField("Sync offset (ms)", () -> rec.audioDelayMs, v -> rec.audioDelayMs = v,
+                RecordingSettings.MIN_AUDIO_DELAY_MS, RecordingSettings.MAX_AUDIO_DELAY_MS)
                 .tooltip("Shifts the audio later (positive) or earlier (negative) if your setup needs it. "
                         + "Timing is measured automatically; most setups need 0."));
 
@@ -202,7 +206,8 @@ final class RecordingPage {
             rec.replayBufferEnabled = v;
             s.changed();
         }).detail(() -> "Runs whenever you are in a world; stops when you leave."));
-        card.add(new Slider("Length", 10, 600, 5, () -> rec.replayBufferSeconds, v -> {
+        card.add(new Slider("Length", RecordingSettings.MIN_REPLAY_SECONDS, RecordingSettings.MAX_REPLAY_SECONDS,
+                5, () -> rec.replayBufferSeconds, v -> {
             rec.replayBufferSeconds = (int) Math.round(v);
             s.changed();
         }).format(v -> Studio.clock(Math.round(v) * 1000L)).defaultValue(60)

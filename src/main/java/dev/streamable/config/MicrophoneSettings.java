@@ -70,6 +70,8 @@ public final class MicrophoneSettings {
         public NoiseLevel level = NoiseLevel.OFF;
         public NoiseBackend backend = NoiseBackend.AUTO;
         /** When non-negative, overrides the level's maximum attenuation (dB). */
+        public static final double MIN_STRENGTH_OVERRIDE_DB = 0;
+        public static final double MAX_STRENGTH_OVERRIDE_DB = 100;
         public double strengthOverrideDb = -1;
         /** 0..1: share of the dry voice blended back in while speech is present. */
         public double voicePreservation = -1;
@@ -296,7 +298,10 @@ public final class MicrophoneSettings {
         highPass.frequencyHz = clamp(highPass.frequencyHz, 20, 400);
         highPass.slopeDbPerOctave = highPass.slopeDbPerOctave >= 24 ? 24 : 12;
         noise.voicePreservation = noise.voicePreservation < 0 ? -1 : clamp(noise.voicePreservation, 0, 1);
-        noise.strengthOverrideDb = noise.strengthOverrideDb < 0 ? -1 : clamp(noise.strengthOverrideDb, 0, 100);
+        noise.strengthOverrideDb = noise.strengthOverrideDb < 0 ? -1
+                : clamp(noise.strengthOverrideDb,
+                        NoiseCancellation.MIN_STRENGTH_OVERRIDE_DB,
+                        NoiseCancellation.MAX_STRENGTH_OVERRIDE_DB);
         gate.thresholdDb = clamp(gate.thresholdDb, -90, -10);
         gate.hysteresisDb = clamp(gate.hysteresisDb, 0, 20);
         gate.rangeDb = clamp(gate.rangeDb, 0, 80);

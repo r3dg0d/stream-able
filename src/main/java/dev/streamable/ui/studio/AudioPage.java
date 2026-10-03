@@ -399,7 +399,8 @@ final class AudioPage {
                     s.micChanged();
                 }).tooltip("Auto tries DPDFNet (48 kHz), then DeepFilterNet2, then GTCRN, keeping the first that runs "
                 + "in real time on this computer."));
-        ai.body().add(slider("Maximum reduction", 0, 60, 1,
+        ai.body().add(slider("Maximum reduction", MicrophoneSettings.NoiseCancellation.MIN_STRENGTH_OVERRIDE_DB,
+                MicrophoneSettings.NoiseCancellation.MAX_STRENGTH_OVERRIDE_DB, 1,
                 () -> mic.noise.strengthOverrideDb < 0
                         ? NoiseCancellationStage.attenuationLimitDb(mic.noise.level) : mic.noise.strengthOverrideDb,
                 v -> mic.noise.strengthOverrideDb = v, s).format(v -> Math.round(v) + " dB")
