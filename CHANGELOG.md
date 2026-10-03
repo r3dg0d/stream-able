@@ -5,6 +5,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Studio "Stop at size" no longer refuses a recording limit above 1,000,000 MB.
+  Validation only turns a negative size into 0 (no limit) and keeps any larger
+  size, so the field now accepts the same non-negative values.
+
 - Studio Page volume now stops at 100%. The slider allowed 0–200%, but
   `BrowserSource.setAudioVolume` stores at most 100%, so the upper half of
   the slider did nothing. Opacity on the same card was already 0–100%.

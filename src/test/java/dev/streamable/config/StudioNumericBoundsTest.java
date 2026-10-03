@@ -94,6 +94,27 @@ class StudioNumericBoundsTest {
     }
 
     @Test
+    @DisplayName("recording file size only floors at zero")
+    void maxFileSizeOnlyFloorsAtZero() {
+        RecordingSettings settings = new RecordingSettings();
+        settings.maxFileSizeMb = -1;
+        settings.validate();
+        assertEquals(0L, settings.maxFileSizeMb);
+
+        settings.maxFileSizeMb = 0;
+        settings.validate();
+        assertEquals(0L, settings.maxFileSizeMb);
+
+        settings.maxFileSizeMb = 1_000_001;
+        settings.validate();
+        assertEquals(1_000_001L, settings.maxFileSizeMb);
+
+        settings.maxFileSizeMb = Long.MAX_VALUE;
+        settings.validate();
+        assertEquals(Long.MAX_VALUE, settings.maxFileSizeMb);
+    }
+
+    @Test
     @DisplayName("interface sliders clamp to the studio bounds")
     void interfaceFieldsMatchValidate() {
         InterfaceSettings settings = new InterfaceSettings();

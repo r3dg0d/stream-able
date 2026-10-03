@@ -61,8 +61,8 @@ final class RecordingPage {
             case MOV -> "MOV (editing)";
             case WEBM -> "WebM (VP9/AV1 + Opus)";
         }, () -> rec.container, v -> rec.container = v));
-        fmt.add(s.intField("Stop at size (MB, 0 = no limit)", () -> (int) rec.maxFileSizeMb,
-                v -> rec.maxFileSizeMb = v, 0, 1_000_000));
+        fmt.add(s.longField("Stop at size (MB, 0 = no limit)", () -> rec.maxFileSizeMb,
+                v -> rec.maxFileSizeMb = v, 0));
         file.add(new Widgets.Notice(() -> rec.container.problemWith(client.recording().plannedEncoder(rec), rec.audioCodec),
                 () -> Theme.DANGER));
         file.add(new Label(() -> {

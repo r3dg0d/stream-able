@@ -24,6 +24,8 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.IntSupplier;
+import java.util.function.LongConsumer;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -273,6 +275,24 @@ public final class Studio {
                 int lo = min.getAsInt();
                 int hi = max.getAsInt();
                 if (lo <= hi && value >= lo && value <= hi) {
+                    set.accept(value);
+                    changed();
+                }
+            } catch (NumberFormatException ignored) {
+                // Still typing.
+            }
+        }).numeric();
+    }
+
+    /**
+     * A numeric field bound to a long with a floor and no ceiling. Partial input
+     * is ignored; the value commits once it parses and is at least {@code min}.
+     */
+    public TextField longField(String label, LongSupplier get, LongConsumer set, long min) {
+        return new TextField(label, () -> Long.toString(get.getAsLong()), raw -> {
+            try {
+                long value = Long.parseLong(raw.trim());
+                if (value >= min) {
                     set.accept(value);
                     changed();
                 }
