@@ -51,18 +51,66 @@ public final class ResolutionPresets {
     }
 
     /**
+     * Tallest 16:9 this suggestion will offer. Taller presets exist, but most
+     * live ingests cap around 1440p; {@link dev.streamable.video.OutputValidation}
+     * still warns when a user picks something larger by hand.
+     */
+    static final int SUGGESTED_STREAM_MAX_HEIGHT = 1440;
+
+    /**
      * A sensible streaming size for a program canvas: the largest common 16:9
-     * output that does not upscale it. 3440x1440 suggests 2560x1440, 5120x1440
-     * suggests 2560x1440, a 1080p canvas suggests 1920x1080.
+     * preset that fits inside the canvas on both axes, and no taller than
+     * {@link #SUGGESTED_STREAM_MAX_HEIGHT}. 3440×1440 and 5120×1440 suggest
+     * 2560×1440; a 1080p canvas suggests 1920×1080; 4K suggests 2560×1440.
+     *
+     * <p>A canvas smaller than 720p on either axis used to fall through to
+     * 1280×720, which upscales the picture. Those canvases now get the largest
+     * even 16:9 that still fits, or the canvas's nearest even size when even
+     * that would be below the minimum resolution.</p>
      */
     public static Resolution suggestedStreamOutput(Resolution canvas) {
-        Resolution best = STANDARD.getFirst();
-        int limit = Math.min(canvas.height(), 1440);
+        Resolution best = null;
         for (Resolution candidate : STANDARD) {
-            if (candidate.height() <= limit) {
+            if (candidate.height() > SUGGESTED_STREAM_MAX_HEIGHT) {
+                continue;
+            }
+            if (candidate.width() <= canvas.width() && candidate.height() <= canvas.height()) {
                 best = candidate;
             }
         }
-        return best;
+        return best != null ? best : largestEvenSixteenByNine(canvas);
+    }
+
+    /**
+     * How to map {@code canvas} onto {@code output} when the user asks for the
+     * suggested stream size. A wider canvas (ultrawide, super ultrawide) is
+     * center-cropped so the 16:9 frame is full. Same-shape and narrower
+     * canvases use Fit so the whole picture stays visible.
+     */
+    public static ScalingMode suggestedStreamMode(Resolution canvas, Resolution output) {
+        if (canvas.aspectRatio() > output.aspectRatio() + 0.02) {
+            return ScalingMode.CENTER_CROP;
+        }
+        return ScalingMode.FIT;
+    }
+
+    /** Largest even 16:9 rectangle that fits in {@code canvas}, or nearest even canvas. */
+    static Resolution largestEvenSixteenByNine(Resolution canvas) {
+        int maxW = canvas.width();
+        int maxH = Math.min(canvas.height(), SUGGESTED_STREAM_MAX_HEIGHT);
+        int height = Math.min(maxH, maxW * 9 / 16);
+        height -= height % 2;
+        int width = height * 16 / 9;
+        width -= width % 2;
+        if (width > maxW) {
+            width = maxW - (maxW % 2);
+            height = width * 9 / 16;
+            height -= height % 2;
+        }
+        if (width < Resolution.MIN_DIMENSION || height < Resolution.MIN_DIMENSION
+                || width > canvas.width() || height > canvas.height()) {
+            return canvas.nearestEven();
+        }
+        return new Resolution(width, height);
     }
 }

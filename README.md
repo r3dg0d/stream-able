@@ -38,7 +38,7 @@ Stream-able is the successor to [Record-able](https://modrinth.com/mod/record-ab
 ### Ultrawide and custom resolutions
 - Independent **program canvas**, **recording output** and **streaming output** sizes. Presets for 16:9, 16:10, 21:9 and 32:9, "match game window", and exact custom sizes.
 - Per-output scaling: **Native, Fit, Fill, Center Crop, Stretch** - never stretched silently. The Video page describes exactly what each output shows, and warns about distortion, odd sizes, encoder limits and services that may handle ultrawide differently.
-- Suggested 16:9 stream size for an ultrawide canvas; record at native 21:9 or 32:9 while streaming 16:9.
+- Suggested 16:9 stream size for an ultrawide canvas: the largest common 16:9 that fits (no upscale, at most 1440p tall), center-cropped so the frame is full. Record at native 21:9 or 32:9 while streaming 16:9.
 - Scaling happens on the GPU before readback.
 
 ### Streaming and multistreaming

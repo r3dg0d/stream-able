@@ -327,15 +327,15 @@ final class VideoPage {
                         + "edges. Center Crop: the central region at full sharpness. Stretch: distorts to fill."));
         if (streaming) {
             size.add(Button.of("Use suggested size", () -> {
-                Resolution suggested = ResolutionPresets.suggestedStreamOutput(client.canvasResolution());
+                Resolution canvas = client.canvasResolution();
+                Resolution suggested = ResolutionPresets.suggestedStreamOutput(canvas);
                 output.matchCanvas = false;
                 output.width = suggested.width();
                 output.height = suggested.height();
-                if (output.mode == ScalingMode.NATIVE) {
-                    output.mode = ScalingMode.FIT;
-                }
+                output.mode = ResolutionPresets.suggestedStreamMode(canvas, suggested);
                 s.changed();
-            }).tooltip("The largest common 16:9 size that does not upscale the canvas.")
+            }).tooltip("Largest common 16:9 that fits in the canvas (no upscale, at most 1440p tall). "
+                    + "A wider canvas is center-cropped so the frame is full; other shapes keep the whole picture.")
                     .enabledWhen(() -> idle(client)));
         }
 

@@ -228,5 +228,48 @@ class OutputTransformTest {
         assertEquals(new Resolution(2560, 1440), ResolutionPresets.suggestedStreamOutput(SUW));
         assertEquals(FHD, ResolutionPresets.suggestedStreamOutput(new Resolution(2560, 1080)));
         assertEquals(FHD, ResolutionPresets.suggestedStreamOutput(FHD));
+        // 4K fits 1440p; the 2160p preset is intentionally above the ingest cap.
+        assertEquals(new Resolution(2560, 1440), ResolutionPresets.suggestedStreamOutput(new Resolution(3840, 2160)));
+    }
+
+    @Test
+    void suggestedStreamNeverUpscalesASmallCanvas() {
+        Resolution windowed = new Resolution(854, 480);
+        Resolution suggested = ResolutionPresets.suggestedStreamOutput(windowed);
+        assertEquals(new Resolution(852, 480), suggested);
+        assertTrue(suggested.width() <= windowed.width());
+        assertTrue(suggested.height() <= windowed.height());
+
+        Resolution portrait = new Resolution(1080, 1920);
+        Resolution portraitOut = ResolutionPresets.suggestedStreamOutput(portrait);
+        assertEquals(new Resolution(1076, 606), portraitOut);
+        assertTrue(portraitOut.width() <= portrait.width());
+        assertTrue(portraitOut.height() <= portrait.height());
+
+        assertEquals(new Resolution(16, 16), ResolutionPresets.suggestedStreamOutput(new Resolution(16, 16)));
+    }
+
+    @Test
+    void suggestedStreamCropsUltrawideAndFitsSameShape() {
+        Resolution uwOut = ResolutionPresets.suggestedStreamOutput(UW);
+        assertEquals(ScalingMode.CENTER_CROP, ResolutionPresets.suggestedStreamMode(UW, uwOut));
+        OutputTransform crop = t(UW, uwOut, ScalingMode.CENTER_CROP);
+        assertFalse(crop.hasBars());
+        assertFalse(crop.resamples());
+        assertFalse(crop.distorts());
+        assertEquals(440, crop.srcX(), EPS);
+        assertEquals(2560, crop.srcW(), EPS);
+        assertEquals(1440, crop.srcH(), EPS);
+
+        assertEquals(ScalingMode.CENTER_CROP,
+                ResolutionPresets.suggestedStreamMode(SUW, ResolutionPresets.suggestedStreamOutput(SUW)));
+        assertEquals(ScalingMode.CENTER_CROP,
+                ResolutionPresets.suggestedStreamMode(new Resolution(2560, 1080), FHD));
+        assertEquals(ScalingMode.FIT, ResolutionPresets.suggestedStreamMode(FHD, FHD));
+        assertEquals(ScalingMode.FIT,
+                ResolutionPresets.suggestedStreamMode(new Resolution(1920, 1200), FHD));
+        Resolution portrait = new Resolution(1080, 1920);
+        assertEquals(ScalingMode.FIT, ResolutionPresets.suggestedStreamMode(
+                portrait, ResolutionPresets.suggestedStreamOutput(portrait)));
     }
 }

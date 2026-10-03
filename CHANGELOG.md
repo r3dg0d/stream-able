@@ -4,6 +4,13 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 
 ## Unreleased
 
+### Fixed
+- **Use suggested size** no longer upscales a canvas smaller than 720p, and no longer
+  letterboxes an ultrawide (or leaves Stretch in place). It picks the largest common
+  16:9 that fits on both axes, at most 1440p tall, and center-crops a wider canvas so
+  the stream fills the frame. Same-shape and narrower canvases still show the whole
+  picture.
+
 ## 1.4.2 - 2026-10-01
 
 Upload-budget and stream continuity fix for Minecraft 26.1.2, 26.2 and 26.3 (Fabric).
