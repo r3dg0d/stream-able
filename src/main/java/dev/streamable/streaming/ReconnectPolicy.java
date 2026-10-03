@@ -52,4 +52,16 @@ public record ReconnectPolicy(boolean enabled, long initialDelayMs, long maxDela
     public String describeAttempt(int attempt) {
         return maxAttempts <= 0 ? "Attempt " + attempt : "Attempt " + attempt + "/" + maxAttempts;
     }
+
+    /**
+     * How long a retry waits, for status text. Sub-second delays stay in
+     * milliseconds so a 500 ms first retry is not shown as "0 seconds".
+     */
+    public static String describeWait(long delayMs) {
+        if (delayMs < 1_000L) {
+            return delayMs + " ms";
+        }
+        long seconds = delayMs / 1_000L;
+        return seconds + (seconds == 1L ? " second" : " seconds");
+    }
 }

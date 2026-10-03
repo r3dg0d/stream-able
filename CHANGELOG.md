@@ -5,6 +5,11 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- A destination whose encoder fails to spawn (missing FFmpeg, a port that will
+  not bind) now follows the same reconnect backoff as a dropped process. Previously
+  only an unexpected exit armed the timer, so that destination stayed on error
+  while the rest of a multistream kept going. The wait is shown in milliseconds
+  when it is under a second, instead of "0 seconds".
 - **Use suggested size** no longer upscales a canvas smaller than 720p, and no longer
   letterboxes an ultrawide (or leaves Stretch in place). It picks the largest common
   16:9 that fits on both axes, at most 1440p tall, and center-crops a wider canvas so

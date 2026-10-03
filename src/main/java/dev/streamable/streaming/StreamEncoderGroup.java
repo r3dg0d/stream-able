@@ -149,10 +149,18 @@ public final class StreamEncoderGroup implements AutoCloseable {
                     group.destinations().size(), group.redactedPublishUrls());
             return null;
         } catch (IOException | RuntimeException e) {
-            String message = "Could not start the encoder: " + e.getMessage();
-            setState(DestinationState.ERROR, message);
+            String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            String message = "Could not start the encoder: " + reason;
             StreamAbleLog.STREAMING.error("Failed to start streaming encoder", e);
+            // A spawn that throws never reaches the exit callback, so without
+            // this the destination sits in ERROR and tick() never retries it.
+            if (process != null && !process.isRunning()) {
+                process = null;
+            }
             closeAudio();
+            if (!stopped) {
+                noteConnectionFailure(message);
+            }
             return message;
         }
     }
@@ -194,6 +202,17 @@ public final class StreamEncoderGroup implements AutoCloseable {
         }
         String detail = process == null ? "" : process.lastError();
         attributeErrorToDestinations(detail);
+        noteConnectionFailure(detail);
+        closeAudio();
+    }
+
+    /**
+     * Counts a failed connect (process exit or a spawn that threw) and either
+     * arms {@link #nextRetryAtMillis} or gives up. Spawn failures must come
+     * through here: {@link FFmpegProcess} only runs the exit callback after a
+     * process has actually started.
+     */
+    private void noteConnectionFailure(String detail) {
         attempts++;
 
         // A group that never published is misconfigured, not merely disconnected.
@@ -208,7 +227,8 @@ public final class StreamEncoderGroup implements AutoCloseable {
             nextRetryAtMillis = System.currentTimeMillis() + delay;
             setState(DestinationState.RECONNECTING,
                     (startupFailure ? "Could not connect. Retrying in " : "Connection lost. Retrying in ")
-                            + (delay / 1000) + " seconds... " + reconnectPolicy.describeAttempt(attempts));
+                            + ReconnectPolicy.describeWait(delay) + "... "
+                            + reconnectPolicy.describeAttempt(attempts));
             StreamAbleLog.STREAMING.warn("Stream group {}; retrying in {} ms ({})",
                     startupFailure ? "failed to connect" : "dropped", delay,
                     reconnectPolicy.describeAttempt(attempts));
@@ -220,7 +240,6 @@ public final class StreamEncoderGroup implements AutoCloseable {
             StreamAbleLog.STREAMING.error("Stream group gave up after {} attempt(s): {}",
                     attempts, detail.isEmpty() ? "no error reported" : detail);
         }
-        closeAudio();
     }
 
     /**
@@ -416,10 +435,20 @@ public final class StreamEncoderGroup implements AutoCloseable {
 
     /** Whether the backoff has elapsed and a retry should be attempted. */
     public boolean isReadyToRetry() {
+        return isReadyToRetry(System.currentTimeMillis());
+    }
+
+    /** Same as {@link #isReadyToRetry()} at a fixed clock, for tests. */
+    boolean isReadyToRetry(long nowMillis) {
         return !stopped
                 && !isRunning()
                 && nextRetryAtMillis > 0
-                && System.currentTimeMillis() >= nextRetryAtMillis;
+                && nowMillis >= nextRetryAtMillis;
+    }
+
+    /** When the next automatic retry is due, or {@code 0} when none is armed. */
+    long scheduledRetryAtMillis() {
+        return nextRetryAtMillis;
     }
 
     public String retry(boolean withAudio) {

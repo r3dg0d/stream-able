@@ -107,6 +107,9 @@ class MultistreamTest {
         assertTrue(policy.shouldRetry(2));
         assertFalse(policy.shouldRetry(3));
         assertEquals("Attempt 2/3", policy.describeAttempt(2));
+        assertEquals("5 seconds", ReconnectPolicy.describeWait(5_000));
+        assertEquals("1 second", ReconnectPolicy.describeWait(1_000));
+        assertEquals("500 ms", ReconnectPolicy.describeWait(500));
     }
 
     @Test
