@@ -151,8 +151,11 @@ Healthy sessions still surface skip/exhaust metrics so backlog is visible early.
 ### Disk space (`recording/DiskSpaceGuardian`)
 Before a recording starts, and every 5 s while one is active, Stream-able
 queries the recordings volume's usable space. Configurable warn / block used-%
-and a free-space floor live on `RecordingSettings`; under 100 MB free always
-blocks. A blocked start returns the message as `lastError`; a mid-recording
+and a free-space floor live on `RecordingSettings`. The floor
+(`diskSpaceMinFreeMb`, default 500, minimum 100) is the absolute stop: a
+recording will not start, and an active one stops, when free space drops below
+it. Studio's disk tooltips read that configured value. A blocked start returns
+the message as `lastError`; a mid-recording
 block asks `StreamAbleClient` to stop (same path as the size limit). Threshold
 math is pure (`evaluate`) so unit tests do not need a real `FileStore`.
 Recording ETA (`secondsRemaining`) divides free bytes by the measured write

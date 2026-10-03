@@ -3,6 +3,7 @@ package dev.streamable.ui.kit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * Base of every Studio component: a rectangle with children, layout,
@@ -21,6 +22,7 @@ public abstract class UiNode {
     protected UiNode parent;
     protected final List<UiNode> children = new ArrayList<>();
     protected String tooltip;
+    private Supplier<String> tooltipSupplier;
     private BooleanSupplier visible = () -> true;
     private BooleanSupplier enabled = () -> true;
     protected final Anim hover = new Anim(Theme.ANIM);
@@ -107,6 +109,14 @@ public abstract class UiNode {
     @SuppressWarnings("unchecked")
     public <T extends UiNode> T tooltip(String text) {
         this.tooltip = text;
+        this.tooltipSupplier = null;
+        return (T) this;
+    }
+
+    /** Re-read on hover so the text can follow a setting the page does not rebuild for. */
+    public <T extends UiNode> T tooltip(Supplier<String> text) {
+        this.tooltip = null;
+        this.tooltipSupplier = text;
         return (T) this;
     }
 
@@ -119,7 +129,7 @@ public abstract class UiNode {
     }
 
     public String tooltip() {
-        return tooltip;
+        return tooltipSupplier != null ? tooltipSupplier.get() : tooltip;
     }
 
     public boolean isFocusable() {

@@ -22,9 +22,6 @@ import java.util.Locale;
  */
 public final class DiskSpaceGuardian {
 
-    /** Hard floor: always block below this free space regardless of %. */
-    static final long HARD_BLOCK_FREE_MB = 100;
-
     /**
      * Under this many seconds of recording left → CRITICAL on Stream Health
      * and the Stream HUD {@code DISK LOW} pill.
@@ -67,13 +64,13 @@ public final class DiskSpaceGuardian {
         long freeMB = freeBytes / (1024L * 1024L);
         int usedPercent = (int) Math.min(100, Math.max(0, 100L - (freeBytes * 100L / totalBytes)));
 
-        if (usedPercent >= thresholds.diskSpaceBlockPercent() || freeMB < HARD_BLOCK_FREE_MB) {
+        if (usedPercent >= thresholds.diskSpaceBlockPercent() || freeMB < thresholds.diskSpaceMinFreeMB()) {
             return new DiskCheckResult(DiskStatus.BLOCKED, freeMB, totalMB, usedPercent,
                     String.format(Locale.ROOT,
                             "Disk is %d%% full (%d MB free). Recording blocked to prevent filling the volume.",
                             usedPercent, freeMB));
         }
-        if (usedPercent >= thresholds.diskSpaceWarnPercent() || freeMB < thresholds.diskSpaceMinFreeMB()) {
+        if (usedPercent >= thresholds.diskSpaceWarnPercent()) {
             return new DiskCheckResult(DiskStatus.WARNING, freeMB, totalMB, usedPercent,
                     String.format(Locale.ROOT,
                             "Disk is %d%% full (%d MB free). Recording may be cut short.",
@@ -159,11 +156,33 @@ public final class DiskSpaceGuardian {
     }
 
     /**
+     * Tooltip for Studio's "Block at used %" field. The free-space half is the
+     * configured floor ({@code diskSpaceMinFreeMb}, default 500), clamped the
+     * same way {@link Thresholds#clamped()} does, not a hardcoded 100 MB.
+     */
+    public static String blockAtUsedTooltip(int minFreeMb) {
+        return "A recording will not start (and an active one stops) at this used percentage, "
+                + "or when fewer than " + configuredMinFreeMb(minFreeMb) + " MB are free.";
+    }
+
+    /** Tooltip for Studio's free-space floor field. Same floor as {@link #blockAtUsedTooltip(int)}. */
+    public static String stopBelowFreeTooltip(int minFreeMb) {
+        return "A recording will not start, and an active one stops, when fewer than "
+                + configuredMinFreeMb(minFreeMb) + " MB are free.";
+    }
+
+    /** Floor actually enforced: {@code diskSpaceMinFreeMb} after {@link Thresholds#clamped()}. */
+    public static int configuredMinFreeMb(int minFreeMb) {
+        return new Thresholds(90, 95, minFreeMb).clamped().diskSpaceMinFreeMB();
+    }
+
+    /**
      * Disk thresholds. Defaults match Record-able / the Recording page.
      *
      * @param diskSpaceWarnPercent  used-percentage at which to warn
      * @param diskSpaceBlockPercent used-percentage at which to refuse / stop
-     * @param diskSpaceMinFreeMB    absolute minimum free space in MiB (warn)
+     * @param diskSpaceMinFreeMB    free space in MiB below which a recording will not start
+     *                              (and an active one stops). Default 500; clamped to at least 100.
      */
     public record Thresholds(int diskSpaceWarnPercent, int diskSpaceBlockPercent, int diskSpaceMinFreeMB) {
 

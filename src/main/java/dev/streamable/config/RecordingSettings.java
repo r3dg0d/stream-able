@@ -85,7 +85,7 @@ public final class RecordingSettings {
     public int diskSpaceWarnPercent = 90;
     /** Used-% at which a recording will not start (and an active one stops). */
     public int diskSpaceBlockPercent = 95;
-    /** Absolute free-space floor (MiB) that triggers a warning. */
+    /** Free space (MiB) below which a recording will not start and an active one stops. */
     public int diskSpaceMinFreeMb = 500;
 
     // ---- audio -------------------------------------------------------------

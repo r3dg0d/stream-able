@@ -5,6 +5,10 @@ All notable changes to Stream-able. Versions follow [Semantic Versioning](https:
 ## Unreleased
 
 ### Fixed
+- Recording disk tooltips no longer say the recording stops below a hardcoded
+  100 MB. They show the configured free-space floor (`diskSpaceMinFreeMb`,
+  default 500). That floor is also what stops a recording, not a separate
+  100 MB constant. The minimum you can set is still 100 MB.
 - Studio numeric fields now use the same bounds as validation: stream audio
   bitrate 32–512 kbps, B-frames 0–8, encoder queue 8–600 frames, video bitrate
   100–200,000 kbps, maximum bitrate 100–400,000 kbps, and buffer size

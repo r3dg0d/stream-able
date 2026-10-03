@@ -91,12 +91,11 @@ final class RecordingPage {
         diskLimits.add(s.intField("Block at used %", () -> rec.diskSpaceBlockPercent, v -> {
             rec.diskSpaceBlockPercent = v;
             rec.validate();
-        }, 50, 100).tooltip("A recording will not start (and an active one stops) at this used percentage, "
-                + "or when fewer than 100 MB are free."));
-        diskLimits.add(s.intField("Warn below free (MB)", () -> rec.diskSpaceMinFreeMb, v -> {
+        }, 50, 100).tooltip(() -> DiskSpaceGuardian.blockAtUsedTooltip(rec.diskSpaceMinFreeMb)));
+        diskLimits.add(s.intField("Stop below free (MB)", () -> rec.diskSpaceMinFreeMb, v -> {
             rec.diskSpaceMinFreeMb = v;
             rec.validate();
-        }, 100, 1_000_000).tooltip("Also warn when free space drops below this absolute floor."));
+        }, 100, 1_000_000).tooltip(() -> DiskSpaceGuardian.stopBelowFreeTooltip(rec.diskSpaceMinFreeMb)));
         file.add(new Label(() -> "Size, scaling and frame rate are on the Video page: "
                 + client.recordingOutput().label() + " at " + rec.fps + " FPS.")
                 .color(Theme.TEXT_MUTED).scale(Theme.TEXT_CAPTION));
